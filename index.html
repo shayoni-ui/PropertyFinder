@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Chesterfield Property Finder</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root {
+    --green10: #1a7a2e; --green9: #2da84d; --green8: #6abf69; --green7: #a5d6a7;
+    --yellow6: #fff176; --yellow5: #ffcc02; --orange4: #ff9800; --orange3: #ef6c00;
+    --red2: #e53935; --red1: #b71c1c;
+    --sidebar-w: 320px; --detail-w: 340px;
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3350;
+    --text: #e8eaf6; --muted: #8892b0; --accent: #5c6bc0;
+    --good: #43a047; --outstanding: #1565c0; --ri: #fb8c00; --inadequate: #c62828;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* HEADER */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; z-index: 1000; flex-shrink: 0; }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg,#5c6bc0,#7c4dff); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .logo h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+  .logo span { font-size: 12px; color: var(--muted); display: block; margin-top: 1px; }
+  .header-stats { display: flex; gap: 20px; }
+  .stat { text-align: center; }
+  .stat-val { font-size: 20px; font-weight: 700; color: #5c6bc0; }
+  .stat-label { font-size: 11px; color: var(--muted); }
+
+  /* LAYOUT */
+  .app { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  .sidebar-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+  .sidebar-header h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; }
+  .filter-group { margin-bottom: 10px; }
+  .filter-label { font-size: 11px; color: var(--muted); margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+  .filter-label span { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 1px 7px; font-size: 10px; color: var(--accent); }
+  .range-row { display: flex; align-items: center; gap: 8px; }
+  select, input[type=range] { width: 100%; }
+  select { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+  select:focus { outline: none; border-color: var(--accent); }
+  .price-display { font-size: 12px; color: var(--accent); text-align: center; margin-top: 3px; }
+  input[type=range] { accent-color: var(--accent); cursor: pointer; }
+  .check-group { display: flex; flex-direction: column; gap: 5px; }
+  .check-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .check-item input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+  .check-item:hover { color: var(--text); }
+  .filter-actions { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+  .btn { padding: 7px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: white; flex: 1; }
+  .btn-primary:hover { background: #3f51b5; }
+  .btn-secondary { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+  .btn-secondary:hover { color: var(--text); }
+
+  /* PROPERTY LIST */
+  .prop-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .prop-list::-webkit-scrollbar { width: 4px; }
+  .prop-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .prop-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s; position: relative; }
+  .prop-card:hover { border-color: var(--accent); background: #1e2236; }
+  .prop-card.selected { border-color: var(--accent); background: #1e2236; box-shadow: 0 0 0 1px var(--accent); }
+  .prop-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px; }
+  .prop-address { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.3; padding-right: 50px; }
+  .prop-price { font-size: 14px; font-weight: 700; color: #5c6bc0; white-space: nowrap; }
+  .prop-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
+  .tag { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+  .tag-bed { background: #1a3a5c; color: #64b5f6; }
+  .tag-type { background: #1a2a3a; color: #90caf9; }
+  .score-badge { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid; }
+  .score-excellent { background: rgba(26,122,46,0.2); color: #4caf50; border-color: #4caf50; }
+  .score-good { background: rgba(67,160,71,0.2); color: #81c784; border-color: #81c784; }
+  .score-avg { background: rgba(255,204,0,0.15); color: #ffcc02; border-color: #ffcc02; }
+  .score-poor { background: rgba(239,108,0,0.2); color: #ff9800; border-color: #ff9800; }
+  .score-bad { background: rgba(229,57,53,0.2); color: #ef5350; border-color: #ef5350; }
+  .prop-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .imd-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .prop-meta-text { font-size: 10px; color: var(--muted); }
+  .no-results { text-align: center; padding: 30px 20px; color: var(--muted); }
+  .no-results .icon { font-size: 32px; margin-bottom: 8px; }
+
+  /* MAP */
+  .map-wrapper { flex: 1; position: relative; overflow: hidden; }
+  #map { width: 100%; height: 100%; }
+
+  /* LEGEND */
+  .legend { position: absolute; bottom: 25px; left: 10px; z-index: 800; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 11px; min-width: 155px; }
+  .legend h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 7px; }
+  .legend-item { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-sep { border-top: 1px solid var(--border); margin: 6px 0; }
+  .legend-school { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+
+  /* DETAIL PANEL */
+  .detail-panel { width: var(--detail-w); background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; transition: width 0.2s; }
+  .detail-panel.hidden { width: 0; border: none; }
+  .detail-inner { width: var(--detail-w); display: flex; flex-direction: column; height: 100%; overflow-y: auto; }
+  .detail-inner::-webkit-scrollbar { width: 4px; }
+  .detail-inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .detail-top { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .detail-close { float: right; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; }
+  .detail-close:hover { color: var(--text); }
+  .detail-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; padding-right: 24px; line-height: 1.3; }
+  .detail-price { font-size: 22px; font-weight: 800; color: #5c6bc0; margin-bottom: 8px; }
+  .detail-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 3px 10px; font-size: 11px; color: var(--muted); }
+
+  /* SCORE BREAKDOWN */
+  .score-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .score-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; }
+  .big-score { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .big-score-num { font-size: 42px; font-weight: 800; }
+  .big-score-label { font-size: 12px; color: var(--muted); }
+  .score-bar-row { margin-bottom: 7px; }
+  .score-bar-label { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+  .score-bar-label span { color: var(--muted); }
+  .score-bar-label strong { color: var(--text); }
+  .score-bar-bg { background: var(--surface2); height: 5px; border-radius: 3px; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+
+  /* SCHOOL LIST */
+  .schools-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .schools-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; }
+  .school-item { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .school-item:last-child { border-bottom: none; }
+  .school-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .school-primary-icon { background: rgba(33,150,243,0.15); }
+  .school-secondary-icon { background: rgba(156,39,176,0.15); }
+  .school-info { flex: 1; }
+  .school-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .school-meta { font-size: 10px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .ofsted-badge { padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 700; }
+  .ofsted-outstanding { background: rgba(21,101,192,0.2); color: #64b5f6; border: 1px solid #1565c0; }
+  .ofsted-good { background: rgba(67,160,71,0.2); color: #81c784; border: 1px solid #43a047; }
+  .ofsted-ri { background: rgba(251,140,0,0.2); color: #ffb74d; border: 1px solid #fb8c00; }
+  .ofsted-inadequate { background: rgba(198,40,40,0.2); color: #ef9a9a; border: 1px solid #c62828; }
+
+  /* DEPRIVATION SECTION */
+  .depriv-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .depriv-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; }
+  .depriv-gauge { display: flex; align-items: center; gap: 12px; }
+  .depriv-decile { font-size: 36px; font-weight: 800; }
+  .depriv-info { flex: 1; }
+  .depriv-label { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .depriv-sub { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .depriv-scale { margin-top: 8px; }
+  .depriv-scale-bar { height: 8px; border-radius: 4px; background: linear-gradient(to right, #b71c1c, #e53935, #ef6c00, #ff9800, #fff176, #ffcc02, #a5d6a7, #6abf69, #2da84d, #1a7a2e); position: relative; }
+  .depriv-marker { position: absolute; top: -4px; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; transform: translateX(-50%); transition: left 0.3s; }
+
+  /* ACTIONS */
+  .actions-section { padding: 12px 16px; }
+  .action-btn { display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 600; width: 100%; margin-bottom: 6px; text-decoration: none; transition: all 0.15s; }
+  .action-btn:hover { border-color: var(--accent); background: #1e2236; }
+  .action-btn .btn-icon { font-size: 16px; }
+
+  /* MAP TOGGLES */
+  .map-controls { position: absolute; top: 10px; right: 10px; z-index: 800; display: flex; flex-direction: column; gap: 6px; }
+  .map-toggle { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 11px; cursor: pointer; color: var(--muted); transition: all 0.15s; white-space: nowrap; }
+  .map-toggle:hover, .map-toggle.active { background: var(--surface2); color: var(--text); border-color: var(--accent); }
+
+  /* SEARCH BAR */
+  .search-bar { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+  .search-input-wrap { position: relative; }
+  .search-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px 7px 30px; font-size: 12px; color: var(--text); }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+  .search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+  .result-count { font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+  /* Responsive Leaflet popup */
+  .leaflet-popup-content-wrapper { background: var(--surface2) !important; border: 1px solid var(--border) !important; color: var(--text) !important; border-radius: 10px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important; }
+  .leaflet-popup-tip { background: var(--surface2) !important; }
+  .popup-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .popup-price { font-size: 16px; font-weight: 800; color: #5c6bc0; margin-bottom: 6px; }
+  .popup-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; color: #8892b0; }
+  .popup-row span { color: var(--text); font-weight: 500; }
+  .popup-score-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); }
+  .popup-score { font-size: 22px; font-weight: 800; }
+  .popup-score-label { font-size: 10px; color: var(--muted); }
+  .popup-btn { display: block; margin-top: 8px; padding: 6px; background: var(--accent); color: white; border-radius: 5px; text-align: center; font-size: 11px; font-weight: 700; cursor: pointer; border: none; width: 100%; }
+  .popup-btn:hover { background: #3f51b5; }
+  .school-popup-title { font-size: 13px; font-weight: 700; margin-bottom: 5px; }
+  .school-popup-sub { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+
+  /* Tab bar for detail */
+  .detail-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .detail-tab { flex: 1; padding: 9px; font-size: 11px; font-weight: 600; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🏠</div>
+    <div>
+      <h1>Chesterfield Property Finder</h1>
+      <span>IMD Deprivation + Schools + Value Scoring</span>
+    </div>
+  </div>
+  <div class="header-stats">
+    <div class="stat"><div class="stat-val" id="hdr-total">0</div><div class="stat-label">Properties</div></div>
+    <div class="stat"><div class="stat-val" id="hdr-shown">0</div><div class="stat-label">Filtered</div></div>
+    <div class="stat"><div class="stat-val" id="hdr-avg-score">–</div><div class="stat-label">Avg Score</div></div>
+    <div class="stat"><div class="stat-val" id="hdr-schools">12</div><div class="stat-label">Schools</div></div>
+  </div>
+</header>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>Filters</h2>
+      <div class="filter-group">
+        <div class="filter-label">Price Range</div>
+        <div class="price-display" id="price-display">£250,000 – £350,000</div>
+        <div class="range-row">
+          <input type="range" id="price-min" min="250000" max="350000" step="5000" value="250000" oninput="updatePriceDisplay()">
+          <input type="range" id="price-max" min="250000" max="350000" step="5000" value="350000" oninput="updatePriceDisplay()">
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Bedrooms</div>
+        <select id="filter-beds" onchange="applyFilters()">
+          <option value="0">Any (3–4 bed)</option>
+          <option value="3">3 Bedrooms only</option>
+          <option value="4">4 Bedrooms only</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Min. IMD Decile <span id="imd-val">Any</span></div>
+        <input type="range" id="filter-imd" min="1" max="10" step="1" value="1" oninput="updateIMDDisplay(); applyFilters()">
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">School Ofsted Filter</div>
+        <select id="filter-school" onchange="applyFilters()">
+          <option value="any">Any rating</option>
+          <option value="outstanding">Outstanding nearby</option>
+          <option value="good">Good+ nearby</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Show on Map</div>
+        <div class="check-group">
+          <label class="check-item"><input type="checkbox" id="show-schools" checked onchange="toggleSchools()"> 🏫 Schools</label>
+          <label class="check-item"><input type="checkbox" id="show-zones" checked onchange="toggleZones()"> 🎨 Deprivation zones</label>
+          <label class="check-item"><input type="checkbox" id="show-avoid" checked onchange="applyFilters()"> ❌ Show 'avoid' properties</label>
+        </div>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Sort By</div>
+        <select id="sort-by" onchange="applyFilters()">
+          <option value="score">Best Value Score ↓</option>
+          <option value="price-asc">Price ↑</option>
+          <option value="price-desc">Price ↓</option>
+          <option value="imd-desc">IMD Decile ↓</option>
+          <option value="beds">Bedrooms</option>
+        </select>
+      </div>
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
+      <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
+    </div>
+    <div class="search-bar">
+      <div class="search-input-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="search-input" placeholder="Search address or area..." oninput="applyFilters()">
+      </div>
+      <div class="result-count" id="result-count">Loading...</div>
+    </div>
+    <div class="prop-list" id="prop-list"></div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-wrapper">
+    <div id="map"></div>
+    <div class="map-controls">
+      <button class="map-toggle active" onclick="setMapLayer('osm',this)">🗺 Street</button>
+      <button class="map-toggle" onclick="setMapLayer('satellite',this)">🛰 Satellite</button>
+    </div>
+    <!-- LEGEND -->
+    <div class="legend">
+      <h3>IMD Deprivation Decile</h3>
+      <div class="legend-item"><div class="legend-dot" style="background:#1a7a2e"></div>Decile 9–10 (Least)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#6abf69"></div>Decile 7–8</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffcc02"></div>Decile 5–6</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ef6c00"></div>Decile 3–4</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e53935"></div>Decile 1–2 (Most)</div>
+      <div class="legend-sep"></div>
+      <h3>Schools</h3>
+      <div class="legend-item"><div class="legend-school" style="background:rgba(21,101,192,0.3);color:#64b5f6">★</div>Outstanding</div>
+      <div class="legend-item"><div class="legend-school" style="background:rgba(67,160,71,0.3);color:#81c784">●</div>Good</div>
+      <div class="legend-item"><div class="legend-school" style="background:rgba(251,140,0,0.3);color:#ffb74d">●</div>Req. Improvement</div>
+      <div class="legend-sep"></div>
+      <div style="font-size:10px;color:var(--muted)">📍 = Property pin</div>
+      <div style="font-size:10px;color:var(--muted)">Numbers show Best Value Score</div>
+    </div>
+  </div>
+
+  <!-- DETAIL PANEL -->
+  <div class="detail-panel hidden" id="detail-panel">
+    <div class="detail-inner" id="detail-inner">
+      <!-- filled by JS -->
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+
+const SCHOOLS = [
+  // SECONDARY
+  { name:"St Mary's Catholic High", type:"secondary", phase:"Secondary", ofsted:"Outstanding", attainment8:59.3, progress8:0.52, lat:53.2520, lng:-1.4100, postcode:"S41 8SA", note:"#1 in Chesterfield. O/S across all areas." },
+  { name:"Brookfield Community School", type:"secondary", phase:"Secondary", ofsted:"Good", attainment8:46.2, progress8:0.18, lat:53.2325, lng:-1.4405, postcode:"S40 3NS", note:"Strong school serving Walton & Brampton" },
+  { name:"Outwood Academy Newbold", type:"secondary", phase:"Secondary", ofsted:"Good", attainment8:44.1, progress8:0.12, lat:53.2528, lng:-1.4085, postcode:"S41 8BB", note:"Popular academy in Newbold" },
+  { name:"Outwood Academy Hasland Hall", type:"secondary", phase:"Secondary", ofsted:"Good", attainment8:42.5, progress8:0.05, lat:53.2168, lng:-1.4035, postcode:"S41 0HR", note:"Serves Hasland & south Chesterfield" },
+  { name:"Whittington Green School", type:"secondary", phase:"Secondary", ofsted:"Requires Improvement", attainment8:38.2, progress8:-0.28, lat:53.2718, lng:-1.4032, postcode:"S41 9LU", note:"Old Whittington area" },
+  // PRIMARY
+  { name:"Newbold CE Primary", type:"primary", phase:"Primary", ofsted:"Outstanding", ks2:83, lat:53.2515, lng:-1.4108, postcode:"S41 8AG", note:"Outstanding in all areas. In St Mary's feeder." },
+  { name:"Whitecotes Primary School", type:"primary", phase:"Primary", ofsted:"Good", ks2:74, lat:53.2192, lng:-1.4268, postcode:"S40 3HH", note:"Walton. Well-regarded community school." },
+  { name:"Brampton Ellis CE Infant", type:"primary", phase:"Primary", ofsted:"Good", ks2:76, lat:53.2352, lng:-1.4415, postcode:"S40 3AX", note:"Brampton. Feeds into Brookfield." },
+  { name:"Loundsley Green Primary", type:"primary", phase:"Primary", ofsted:"Good", ks2:71, lat:53.2248, lng:-1.4458, postcode:"S40 4LG", note:"Loundsley Green. Good recent results." },
+  { name:"Hasland Junior School", type:"primary", phase:"Primary", ofsted:"Good", ks2:68, lat:53.2172, lng:-1.4038, postcode:"S41 0HR", note:"Hasland. Good with supportive community." },
+  { name:"Hady Primary School", type:"primary", phase:"Primary", ofsted:"Good", ks2:70, lat:53.2360, lng:-1.4098, postcode:"S41 0EQ", note:"Near Hady. Good school, mixed catchment." },
+  { name:"Abercrombie Primary", type:"primary", phase:"Primary", ofsted:"Good", ks2:72, lat:53.2498, lng:-1.4128, postcode:"S41 7QE", note:"Newbold S41 7 area. Feeds St Mary's." },
+];
+
+// ============================================================
+// SCORING ALGORITHM
+// ============================================================
+// Composite 'Best Value Score' out of 100:
+//  - IMD Decile (35 pts): Decile 10=35, 9=31, 8=27, 7=23, 6=18, 5=14, 4=9, 3=5, 2=2, 1=0
+//  - Price Efficiency (25 pts): lower price in budget = higher score
+//  - School Quality (25 pts): best nearby school Ofsted + GCSE/KS2
+//  - Property Features (15 pts): type, no chain, extended/renovated
+function calcScore(p) {
+  // 1. IMD Score
+  const imdPts = [0,0,2,5,9,14,18,23,27,31,35];
+  const imdScore = imdPts[Math.min(10, Math.max(1, p.imd))];
+
+  // 2. Price Efficiency (budget £250k-£350k → 25-0 points, linear)
+  const priceScore = Math.round(25 * (1 - (p.price - 250000) / 100000));
+
+  // 3. School Quality
+  let schoolScore = 0;
+  const nearby = getNearbySchools(p.lat, p.lng, 2.0);
+  const nearbyPrimary = nearby.filter(s => s.type === 'primary');
+  const nearbySecondary = nearby.filter(s => s.type === 'secondary');
+  const bestPrimary = nearbyPrimary.sort((a,b) => ofstedRank(b.ofsted)-ofstedRank(a.ofsted))[0];
+  const bestSecondary = nearbySecondary.sort((a,b) => ofstedRank(b.ofsted)-ofstedRank(a.ofsted))[0];
+  const ofstedScores = {Outstanding:12, Good:9, 'Requires Improvement':5, Inadequate:2};
+  if (bestPrimary) schoolScore += ofstedScores[bestPrimary.ofsted] || 0;
+  if (bestSecondary) schoolScore += ofstedScores[bestSecondary.ofsted] || 0;
+  // Bonus for KS2/Attainment8
+  if (bestPrimary && bestPrimary.ks2 >= 80) schoolScore += 1;
+  if (bestSecondary && bestSecondary.attainment8 >= 55) schoolScore += 1;
+  schoolScore = Math.min(25, schoolScore);
+
+  // 4. Property Features
+  let featScore = 0;
+  if (p.ptype === 'Detached') featScore += 5;
+  else if (p.ptype === 'Semi-Detached') featScore += 3;
+  else featScore += 1;
+  if (p.nochain) featScore += 4;
+  if (p.extended || p.renovated) featScore += 3;
+  if (p.baths >= 2) featScore += 2;
+  if (p.largeplot) featScore += 1;
+  featScore = Math.min(15, featScore);
+
+  return {
+    total: imdScore + priceScore + schoolScore + featScore,
+    imdScore, priceScore, schoolScore, featScore
+  };
+}
+
+function ofstedRank(r) {
+  return {Outstanding:4, Good:3, 'Requires Improvement':2, Inadequate:1}[r] || 0;
+}
+
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function getNearbySchools(lat, lng, radiusKm) {
+  return SCHOOLS.map(s => ({...s, dist: haversine(lat, lng, s.lat, s.lng)}))
+    .filter(s => s.dist <= radiusKm)
+    .sort((a,b) => a.dist - b.dist);
+}
+
+// ============================================================
+// PROPERTIES
+// ============================================================
+const PROPERTIES_RAW = [
+  // ===== DECILE 9-10: WALTON, BRAMPTON, LOUNDSLEY GREEN =====
+  { id:1,  address:"Newhaven Close, Walton",          area:"Walton",         price:350000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:true,  lat:53.2185,lng:-1.4295, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:2,  address:"Walgrove Road, Walton",            area:"Walton",         price:349950, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:true, extended:true, largeplot:true,  lat:53.2192,lng:-1.4305, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:3,  address:"Storrs Road, Brampton, S40",       area:"Brampton",       price:350000, beds:3, ptype:"Semi-Detached",baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2365,lng:-1.4430, agent:"Redbrik",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:4,  address:"Shaftesbury Avenue, Ashgate, S40", area:"Ashgate",        price:350000, beds:3, ptype:"Semi-Detached",baths:1, imd:9, nochain:true, renovated:true, extended:false,largeplot:false, lat:53.2420,lng:-1.4465, agent:"Purplebricks",   status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:5,  address:"Greenways, Walton",                area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:true, renovated:false,extended:false,largeplot:false, lat:53.2197,lng:-1.4285, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:6,  address:"Moorland View Road, Walton (1)",   area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2205,lng:-1.4312, agent:"Redbrik",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:7,  address:"Lake View Avenue, Walton",         area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2180,lng:-1.4310, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:8,  address:"Wolfe Close, Walton, S40",         area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2210,lng:-1.4298, agent:"Redbrik",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:9,  address:"Horsewood Road, Walton",           area:"Walton",         price:335000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2195,lng:-1.4322, agent:"Strada Estates", status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:10, address:"Orchards Way, Walton",             area:"Walton",         price:335000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2188,lng:-1.4318, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:11, address:"Moorland View Road, Walton (2)",   area:"Walton",         price:330000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2202,lng:-1.4308, agent:"Wards",          status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:12, address:"Storrs Road, Brampton",            area:"Brampton",       price:330000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:true, renovated:false,extended:false,largeplot:true,  lat:53.2348,lng:-1.4428, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:13, address:"Springfield Avenue, Brampton, S40",area:"Brampton",       price:325000, beds:3, ptype:"Semi-Detached",baths:1, imd:9, nochain:false,renovated:true, extended:false,largeplot:false, lat:53.2358,lng:-1.4438, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:14, address:"Old Road, Brampton, S40 3QL",      area:"Brampton",       price:325000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2368,lng:-1.4450, agent:"Hunters",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:15, address:"Woodcote Way, Walton",             area:"Walton",         price:325000, beds:3, ptype:"Detached",     baths:3, imd:9, nochain:true, renovated:false,extended:false,largeplot:false, lat:53.2175,lng:-1.4288, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:16, address:"Thorndon Way, Chesterfield, S40",  area:"Walton",         price:325000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:true, renovated:false,extended:false,largeplot:true,  lat:53.2222,lng:-1.4275, agent:"Pinewood",       status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:17, address:"Ashgate Valley Road, Brockwell",   area:"Brockwell",      price:323000, beds:3, ptype:"Detached",     baths:1, imd:8, nochain:true, renovated:false,extended:false,largeplot:true,  lat:53.2450,lng:-1.4368, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:18, address:"Lansdowne Avenue, Chesterfield, S41",area:"Newbold",      price:340000, beds:3, ptype:"Detached",     baths:2, imd:8, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2490,lng:-1.4125, agent:"Yopa",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:19, address:"Pomegranate Road, Newbold, S41 7BN",area:"Newbold S41 7", price:350000, beds:3, ptype:"Detached",     baths:2, imd:8, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2515,lng:-1.4115, agent:"Dales & Peaks",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:20, address:"Hawksley Avenue, Brockwell",       area:"Brockwell",      price:280000, beds:3, ptype:"Semi-Detached",baths:1, imd:8, nochain:false,renovated:true, extended:false,largeplot:false, lat:53.2445,lng:-1.4358, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  // 4-BED LEAST DEPRIVED
+  { id:21, address:"Linacre Road, Loundsley Green, S40 4UX",area:"Loundsley Green",price:331995,beds:4,ptype:"Detached",  baths:2, imd:10,nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2258,lng:-1.4468, agent:"Tilia Homes",   status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:22, address:"St Giles Close, Chesterfield, S40",area:"Walton",          price:330000, beds:4, ptype:"Detached",     baths:3, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2240,lng:-1.4420, agent:"Pinewood",       status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:23, address:"Chatsworth Road, Brampton",        area:"Brampton",       price:315000, beds:4, ptype:"Semi-Detached",baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2342,lng:-1.4415, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:24, address:"Old Road, Brampton (4 bed)",       area:"Brampton",       price:312000, beds:4, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:true, extended:false,largeplot:false, lat:53.2370,lng:-1.4455, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:25, address:"Langdale Close, Linacre Woods, S40",area:"Loundsley Green",price:305000, beds:4, ptype:"Detached",     baths:2, imd:10,nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2250,lng:-1.4475, agent:"Strada",         status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:26, address:"Brockwell Lane, Brockwell",        area:"Brockwell",      price:299950, beds:4, ptype:"Detached",     baths:2, imd:8, nochain:false,renovated:false,extended:false,largeplot:true,  lat:53.2448,lng:-1.4345, agent:"W.T. Parker",    status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:27, address:"Weston Close, Chesterfield, S40",  area:"Walton",         price:295000, beds:4, ptype:"Semi-Detached",baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2232,lng:-1.4292, agent:"Purplebricks",   status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:28, address:"Trevorrow Crescent, Chesterfield, S40",area:"Walton",     price:292000, beds:4, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2215,lng:-1.4265, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:29, address:"Woodcote Way, Walton (4 bed)",     area:"Walton",         price:288000, beds:4, ptype:"Semi-Detached",baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2178,lng:-1.4285, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:30, address:"Grampian Crescent, Loundsley Green",area:"Loundsley Green",price:282000, beds:4, ptype:"Semi-Detached",baths:2, imd:10,nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2265,lng:-1.4480, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  // ===== DECILE 5-6: HASLAND (CAUTION) =====
+  { id:31, address:"Broomfield Avenue, Hasland",       area:"Hasland",        price:325000, beds:3, ptype:"Detached",     baths:1, imd:6, nochain:true, renovated:true, extended:false,largeplot:false, lat:53.2175,lng:-1.4045, agent:"Haus",           status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:32, address:"Norwood Avenue, Hasland, S41 0NH", area:"Hasland",        price:318500, beds:3, ptype:"Detached",     baths:2, imd:6, nochain:false,renovated:false,extended:false,largeplot:true,  lat:53.2165,lng:-1.4038, agent:"Hunters",        status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:33, address:"Hady Lane, Chesterfield, S41",     area:"Hady",           price:315000, beds:3, ptype:"Semi-Detached",baths:2, imd:5, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2355,lng:-1.4105, agent:"Redbrik",        status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:34, address:"Marine Drive, Chesterfield, S41 0FG",area:"Hady/Spire",  price:315000, beds:4, ptype:"Detached",     baths:2, imd:5, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2315,lng:-1.4080, agent:"Pinewood",       status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:35, address:"Opal Street, Hasland, S41",        area:"Hasland",        price:325000, beds:4, ptype:"Detached",     baths:2, imd:6, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2168,lng:-1.4028, agent:"Hunters",        status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  // ===== DECILE 1-4: AVOID =====
+  { id:36, address:"Layton Drive, Old Whittington",    area:"Old Whittington", price:345000, beds:3, ptype:"House",       baths:2, imd:4, nochain:false,renovated:false,extended:true, largeplot:true,  lat:53.2688,lng:-1.4025, agent:"W.T. Parker",   status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:37, address:"Whinfell Road, Newbold, S41 8ES",  area:"Newbold S41 8",  price:309950, beds:3, ptype:"Detached",     baths:2, imd:3, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2582,lng:-1.4018, agent:"Pinewood",       status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:38, address:"Spire Heights, Chesterfield, S41", area:"Spire/Dunston",  price:340000, beds:4, ptype:"Detached",     baths:2, imd:4, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2298,lng:-1.4065, agent:"Redbrik",        status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:39, address:"Comley Crescent, Chesterfield, S41 9SH",area:"Dunston",  price:350000, beds:4, ptype:"Detached",     baths:2, imd:2, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2392,lng:-1.3868, agent:"Unknown",        status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:40, address:"Rutland Road, Chesterfield, S40 1LZ",area:"Town Centre",  price:275000, beds:4, ptype:"Terraced",     baths:1, imd:4, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2390,lng:-1.4185, agent:"Purplebricks",   status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+];
+
+// Pre-calculate scores
+const PROPERTIES = PROPERTIES_RAW.map(p => {
+  const s = calcScore(p);
+  return {...p, score: s.total, scoreBreakdown: s};
+});
+
+// ============================================================
+// DEPRIVATION ZONES (approximate circles per area)
+// ============================================================
+const ZONES = [
+  { name:"Walton", lat:53.2195, lng:-1.4300, radius:900, decile:9, color:"#2da84d" },
+  { name:"Brampton", lat:53.2360, lng:-1.4440, radius:850, decile:9, color:"#2da84d" },
+  { name:"Loundsley Green", lat:53.2255, lng:-1.4468, radius:700, decile:10, color:"#1a7a2e" },
+  { name:"Ashgate", lat:53.2430, lng:-1.4460, radius:650, decile:9, color:"#2da84d" },
+  { name:"Brockwell", lat:53.2448, lng:-1.4355, radius:750, decile:8, color:"#6abf69" },
+  { name:"Newbold S41 7", lat:53.2512, lng:-1.4110, radius:700, decile:8, color:"#6abf69" },
+  { name:"Hasland", lat:53.2170, lng:-1.4038, radius:750, decile:6, color:"#ffcc02" },
+  { name:"Hady", lat:53.2340, lng:-1.4090, radius:600, decile:5, color:"#ff9800" },
+  { name:"Old Whittington", lat:53.2688, lng:-1.4022, radius:800, decile:4, color:"#ef6c00" },
+  { name:"Newbold S41 8", lat:53.2580, lng:-1.4015, radius:600, decile:3, color:"#e53935" },
+  { name:"Dunston/Comley", lat:53.2390, lng:-1.3870, radius:700, decile:2, color:"#b71c1c" },
+  { name:"Town Centre", lat:53.2347, lng:-1.4201, radius:650, decile:4, color:"#ef6c00" },
+];
+
+// ============================================================
+// MAP INIT
+// ============================================================
+let map, markers = [], schoolMarkers = [], zoneCircles = [], selectedId = null;
+let osmLayer, satelliteLayer;
+
+function initMap() {
+  map = L.map('map', { zoomControl: true }).setView([53.2300, -1.4250], 13);
+  osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 19
+  });
+  satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '© Esri', maxZoom: 19
+  });
+  osmLayer.addTo(map);
+  renderZones();
+  renderSchools();
+  applyFilters();
+}
+
+function setMapLayer(type, btn) {
+  document.querySelectorAll('.map-toggle').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (type === 'osm') { map.removeLayer(satelliteLayer); osmLayer.addTo(map); }
+  else { map.removeLayer(osmLayer); satelliteLayer.addTo(map); }
+}
+
+// ============================================================
+// DEPRIVATION ZONES
+// ============================================================
+function renderZones() {
+  zoneCircles.forEach(c => map.removeLayer(c));
+  zoneCircles = [];
+  ZONES.forEach(z => {
+    const circle = L.circle([z.lat, z.lng], {
+      radius: z.radius, color: z.color, weight: 1,
+      fillColor: z.color, fillOpacity: 0.12
+    }).addTo(map);
+    circle.bindTooltip(`<strong>${z.name}</strong><br>IMD Decile ${z.decile}`, {sticky:true});
+    zoneCircles.push(circle);
+  });
+}
+
+function toggleZones() {
+  const show = document.getElementById('show-zones').checked;
+  zoneCircles.forEach(c => show ? c.addTo(map) : map.removeLayer(c));
+}
+
+// ============================================================
+// SCHOOLS
+// ============================================================
+function ofstedColor(r) {
+  return {Outstanding:'#1565c0',Good:'#43a047','Requires Improvement':'#fb8c00',Inadequate:'#c62828'}[r] || '#607d8b';
+}
+function ofstedEmoji(r) {
+  return {Outstanding:'★',Good:'●','Requires Improvement':'▲',Inadequate:'✕'}[r] || '?';
+}
+
+function renderSchools() {
+  schoolMarkers.forEach(m => map.removeLayer(m));
+  schoolMarkers = [];
+  SCHOOLS.forEach(s => {
+    const size = s.type === 'secondary' ? 20 : 16;
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:${size}px;height:${size}px;background:${ofstedColor(s.ofsted)}22;border:2px solid ${ofstedColor(s.ofsted)};border-radius:${s.type==='secondary'?'4px':'50%'};display:flex;align-items:center;justify-content:center;font-size:${size===20?10:8}px;color:${ofstedColor(s.ofsted)};font-weight:700">${ofstedEmoji(s.ofsted)}</div>`,
+      iconSize: [size, size], iconAnchor: [size/2, size/2]
+    });
+    const m = L.marker([s.lat, s.lng], {icon}).addTo(map);
+    const perfLine = s.type === 'secondary'
+      ? `<div class="popup-row">Attainment 8 <span>${s.attainment8}</span></div><div class="popup-row">Progress 8 <span>${s.progress8>=0?'+':''}${s.progress8}</span></div>`
+      : `<div class="popup-row">KS2 Expected % <span>${s.ks2}%</span></div>`;
+    m.bindPopup(`
+      <div class="school-popup-title">🏫 ${s.name}</div>
+      <div class="school-popup-sub">${s.phase} • ${s.postcode}</div>
+      <div class="popup-row">Ofsted <span><span class="ofsted-badge ofsted-${s.ofsted.replace(/ /g,'-').toLowerCase()}">${s.ofsted}</span></span></div>
+      ${perfLine}
+      <div class="school-popup-sub" style="margin-top:5px;font-style:italic">${s.note}</div>
+    `, {maxWidth:220});
+    schoolMarkers.push(m);
+  });
+}
+
+function toggleSchools() {
+  const show = document.getElementById('show-schools').checked;
+  schoolMarkers.forEach(m => show ? m.addTo(map) : map.removeLayer(m));
+}
+
+// ============================================================
+// PROPERTY MARKERS
+// ============================================================
+function getScoreColor(score) {
+  if (score >= 80) return '#2da84d';
+  if (score >= 65) return '#6abf69';
+  if (score >= 50) return '#ffcc02';
+  if (score >= 35) return '#ff9800';
+  return '#e53935';
+}
+
+function getIMDColor(imd) {
+  const colors = {10:'#1a7a2e',9:'#2da84d',8:'#6abf69',7:'#a5d6a7',6:'#fff176',5:'#ffcc02',4:'#ff9800',3:'#ef6c00',2:'#e53935',1:'#b71c1c'};
+  return colors[imd] || '#607d8b';
+}
+
+function renderMarkers(props) {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  props.forEach(p => {
+    const color = getIMDColor(p.imd);
+    const scoreCol = getScoreColor(p.score);
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="position:relative;width:36px;height:36px">
+        <div style="width:32px;height:32px;background:${color}22;border:2.5px solid ${color};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${color};cursor:pointer">${p.score}</div>
+        <div style="position:absolute;bottom:-2px;right:-2px;width:12px;height:12px;background:${p.beds===4?'#7c4dff':'#5c6bc0'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;color:white;font-weight:700">${p.beds}</div>
+      </div>`,
+      iconSize: [36, 36], iconAnchor: [18, 18]
+    });
+    const m = L.marker([p.lat, p.lng], {icon}).addTo(map);
+    m.on('click', () => selectProperty(p.id));
+    m.bindPopup(`
+      <div class="popup-title">📍 ${p.address}</div>
+      <div class="popup-price">£${p.price.toLocaleString()}</div>
+      <div class="popup-row">Bedrooms <span>${p.beds} bed ${p.ptype}</span></div>
+      <div class="popup-row">IMD Decile <span style="color:${color}">▉ ${p.imd}/10</span></div>
+      <div class="popup-row">Agent <span>${p.agent}</span></div>
+      <div class="popup-score-row">
+        <div>
+          <div class="popup-score" style="color:${scoreCol}">${p.score}</div>
+          <div class="popup-score-label">Best Value Score</div>
+        </div>
+        <div style="flex:1;margin-left:10px;font-size:10px;color:#8892b0">
+          IMD: ${p.scoreBreakdown.imdScore}pts<br>
+          Price: ${p.scoreBreakdown.priceScore}pts<br>
+          Schools: ${p.scoreBreakdown.schoolScore}pts<br>
+          Features: ${p.scoreBreakdown.featScore}pts
+        </div>
+      </div>
+      <button class="popup-btn" onclick="selectProperty(${p.id})">View Full Details →</button>
+    `, {maxWidth:240});
+    markers.push({id:p.id, marker:m});
+  });
+}
+
+// ============================================================
+// FILTERS
+// ============================================================
+function updatePriceDisplay() {
+  const min = +document.getElementById('price-min').value;
+  const max = +document.getElementById('price-max').value;
+  document.getElementById('price-display').textContent = `£${(min/1000).toFixed(0)}k – £${(max/1000).toFixed(0)}k`;
+  applyFilters();
+}
+function updateIMDDisplay() {
+  const v = document.getElementById('filter-imd').value;
+  document.getElementById('imd-val').textContent = `${v}+`;
+}
+
+function applyFilters() {
+  const minPrice = +document.getElementById('price-min').value;
+  const maxPrice = +document.getElementById('price-max').value;
+  const beds = +document.getElementById('filter-beds').value;
+  const minIMD = +document.getElementById('filter-imd').value;
+  const schoolFilter = document.getElementById('filter-school').value;
+  const showAvoid = document.getElementById('show-avoid').checked;
+  const search = document.getElementById('search-input').value.toLowerCase();
+  const sortBy = document.getElementById('sort-by').value;
+
+  let filtered = PROPERTIES.filter(p => {
+    if (p.price < minPrice || p.price > maxPrice) return false;
+    if (beds > 0 && p.beds !== beds) return false;
+    if (p.imd < minIMD) return false;
+    if (!showAvoid && p.status.includes('❌')) return false;
+    if (search && !p.address.toLowerCase().includes(search) && !p.area.toLowerCase().includes(search)) return false;
+    if (schoolFilter !== 'any') {
+      const nearby = getNearbySchools(p.lat, p.lng, 2.0);
+      const hasOutstanding = nearby.some(s => s.ofsted === 'Outstanding');
+      const hasGoodPlus = nearby.some(s => s.ofsted === 'Outstanding' || s.ofsted === 'Good');
+      if (schoolFilter === 'outstanding' && !hasOutstanding) return false;
+      if (schoolFilter === 'good' && !hasGoodPlus) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  filtered.sort((a,b) => {
+    switch(sortBy) {
+      case 'score': return b.score - a.score;
+      case 'price-asc': return a.price - b.price;
+      case 'price-desc': return b.price - a.price;
+      case 'imd-desc': return b.imd - a.imd;
+      case 'beds': return b.beds - a.beds;
+      default: return b.score - a.score;
+    }
+  });
+
+  // Update header stats
+  document.getElementById('hdr-total').textContent = PROPERTIES.length;
+  document.getElementById('hdr-shown').textContent = filtered.length;
+  const avgScore = filtered.length ? Math.round(filtered.reduce((s,p)=>s+p.score,0)/filtered.length) : 0;
+  document.getElementById('hdr-avg-score').textContent = filtered.length ? avgScore : '–';
+  document.getElementById('result-count').textContent = `${filtered.length} of ${PROPERTIES.length} properties shown`;
+
+  renderMarkers(filtered);
+  renderList(filtered);
+}
+
+function resetFilters() {
+  document.getElementById('price-min').value = 250000;
+  document.getElementById('price-max').value = 350000;
+  document.getElementById('filter-beds').value = 0;
+  document.getElementById('filter-imd').value = 1;
+  document.getElementById('filter-school').value = 'any';
+  document.getElementById('show-avoid').checked = true;
+  document.getElementById('search-input').value = '';
+  document.getElementById('sort-by').value = 'score';
+  document.getElementById('show-schools').checked = true;
+  document.getElementById('show-zones').checked = true;
+  updatePriceDisplay();
+  updateIMDDisplay();
+  toggleSchools();
+  toggleZones();
+  applyFilters();
+}
+
+// ============================================================
+// PROPERTY LIST
+// ============================================================
+function getScoreClass(score) {
+  if (score >= 80) return 'score-excellent';
+  if (score >= 65) return 'score-good';
+  if (score >= 50) return 'score-avg';
+  if (score >= 35) return 'score-poor';
+  return 'score-bad';
+}
+
+function renderList(props) {
+  const el = document.getElementById('prop-list');
+  if (!props.length) {
+    el.innerHTML = '<div class="no-results"><div class="icon">🔍</div><div>No properties match your filters</div></div>';
+    return;
+  }
+  el.innerHTML = props.map(p => `
+    <div class="prop-card ${selectedId===p.id?'selected':''}" id="card-${p.id}" onclick="selectProperty(${p.id})">
+      <div class="prop-card-header">
+        <div class="prop-address">${p.address}</div>
+        <div class="prop-price">£${(p.price/1000).toFixed(0)}k</div>
+      </div>
+      <div class="score-badge ${getScoreClass(p.score)}">${p.score}</div>
+      <div class="prop-tags">
+        <span class="tag tag-bed">${p.beds} bed</span>
+        <span class="tag tag-type">${p.ptype}</span>
+        ${p.nochain?'<span class="tag" style="background:#1a3a2a;color:#66bb6a">No chain</span>':''}
+        ${p.renovated?'<span class="tag" style="background:#2a2a1a;color:#ffd54f">Renovated</span>':''}
+      </div>
+      <div class="prop-meta">
+        <div class="imd-dot" style="background:${getIMDColor(p.imd)}"></div>
+        <div class="prop-meta-text">IMD Decile ${p.imd} • ${p.area} • ${p.agent}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// DETAIL PANEL
+// ============================================================
+function selectProperty(id) {
+  selectedId = id;
+  const p = PROPERTIES.find(x => x.id === id);
+  if (!p) return;
+
+  // Highlight card
+  document.querySelectorAll('.prop-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById('card-'+id);
+  if (card) { card.classList.add('selected'); card.scrollIntoView({block:'nearest'}); }
+
+  // Pan map
+  const markerObj = markers.find(m => m.id === id);
+  if (markerObj) { map.setView([p.lat, p.lng], 15); markerObj.marker.openPopup(); }
+
+  // Render detail panel
+  const panel = document.getElementById('detail-panel');
+  panel.classList.remove('hidden');
+  const nearby = getNearbySchools(p.lat, p.lng, 2.5).slice(0, 6);
+  const scoreCol = getScoreColor(p.score);
+  const imdColor = getIMDColor(p.imd);
+  const decilePct = ((p.imd-1)/9*100).toFixed(0);
+  const imdLabel = p.imd >= 9 ? 'Least Deprived' : p.imd >= 7 ? 'Less Deprived' : p.imd >= 5 ? 'Average' : p.imd >= 3 ? 'More Deprived' : 'Most Deprived';
+  const imdDesc = p.imd >= 9 ? 'Top tier area. Strong property values, low social challenges.' : p.imd >= 7 ? 'Good residential area. Mostly affluent neighbourhood.' : p.imd >= 5 ? 'Mixed area. Average deprivation levels for England.' : 'Below average area. Consider carefully before purchasing.';
+
+  document.getElementById('detail-inner').innerHTML = `
+    <div class="detail-top">
+      <button class="detail-close" onclick="closeDetail()">✕</button>
+      <div class="detail-title">📍 ${p.address}</div>
+      <div class="detail-price">£${p.price.toLocaleString()}</div>
+      <div class="detail-chips">
+        <span class="chip">🛏 ${p.beds} bed</span>
+        <span class="chip">🏠 ${p.ptype}</span>
+        <span class="chip">🚿 ${p.baths} bath</span>
+        ${p.nochain?'<span class="chip" style="color:#66bb6a">✓ No Chain</span>':''}
+        ${p.renovated?'<span class="chip" style="color:#ffd54f">✓ Renovated</span>':''}
+        ${p.extended?'<span class="chip" style="color:#4fc3f7">↔ Extended</span>':''}
+        ${p.largeplot?'<span class="chip" style="color:#aed581">🌳 Large Plot</span>':''}
+      </div>
+      <div style="font-size:11px;color:var(--muted)">Agent: ${p.agent} &nbsp;|&nbsp; ${p.status}</div>
+    </div>
+    <div class="detail-tabs">
+      <div class="detail-tab active" onclick="switchTab(this,'tab-score')">Score</div>
+      <div class="detail-tab" onclick="switchTab(this,'tab-schools')">Schools</div>
+      <div class="detail-tab" onclick="switchTab(this,'tab-depriv')">Deprivation</div>
+    </div>
+
+    <!-- SCORE TAB -->
+    <div id="tab-score" class="tab-content active">
+      <div class="score-section">
+        <h3>Best Value Score</h3>
+        <div class="big-score">
+          <div class="big-score-num" style="color:${scoreCol}">${p.score}</div>
+          <div>
+            <div class="big-score-label">out of 100</div>
+            <div style="font-size:12px;color:${scoreCol};margin-top:3px">${p.score>=80?'Excellent Value':p.score>=65?'Good Value':p.score>=50?'Average Value':p.score>=35?'Below Average':'Poor Value'}</div>
+          </div>
+        </div>
+        <div class="score-bar-row">
+          <div class="score-bar-label"><span>Location (IMD Decile)</span><strong>${p.scoreBreakdown.imdScore}/35</strong></div>
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.imdScore/35)*100}%;background:${imdColor}"></div></div>
+        </div>
+        <div class="score-bar-row">
+          <div class="score-bar-label"><span>Price Efficiency</span><strong>${p.scoreBreakdown.priceScore}/25</strong></div>
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.priceScore/25)*100}%;background:#5c6bc0"></div></div>
+        </div>
+        <div class="score-bar-row">
+          <div class="score-bar-label"><span>School Quality</span><strong>${p.scoreBreakdown.schoolScore}/25</strong></div>
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.schoolScore/25)*100}%;background:#7c4dff"></div></div>
+        </div>
+        <div class="score-bar-row">
+          <div class="score-bar-label"><span>Property Features</span><strong>${p.scoreBreakdown.featScore}/15</strong></div>
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.featScore/15)*100}%;background:#00bcd4"></div></div>
+        </div>
+        <div style="margin-top:10px;font-size:10px;color:var(--muted);line-height:1.5;padding:8px;background:var(--surface2);border-radius:6px">
+          <strong style="color:var(--text)">Algorithm:</strong> IMD Decile (35%) + Price vs budget (25%) + Nearest school Ofsted/results (25%) + Property features (15%)
+        </div>
+      </div>
+    </div>
+
+    <!-- SCHOOLS TAB -->
+    <div id="tab-schools" class="tab-content">
+      <div class="schools-section">
+        <h3>Nearby Schools (within 2.5km)</h3>
+        ${nearby.length ? nearby.map(s => `
+          <div class="school-item">
+            <div class="school-icon ${s.type==='secondary'?'school-secondary-icon':'school-primary-icon'}">${s.type==='secondary'?'🎓':'🏫'}</div>
+            <div class="school-info">
+              <div class="school-name">${s.name}</div>
+              <div class="school-meta">
+                <span class="ofsted-badge ofsted-${s.ofsted.replace(/ /g,'-').toLowerCase()}">${s.ofsted}</span>
+                <span>${s.phase}</span>
+                <span>${s.dist.toFixed(1)}km</span>
+              </div>
+              <div class="school-meta" style="margin-top:3px">
+                ${s.type==='secondary'?`Att8: ${s.attainment8} | P8: ${s.progress8>=0?'+':''}${s.progress8}`:`KS2: ${s.ks2}%`}
+              </div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px;font-style:italic">${s.note}</div>
+            </div>
+          </div>
+        `).join('') : '<div style="color:var(--muted);font-size:12px;padding:10px 0">No schools data within 2.5km</div>'}
+      </div>
+    </div>
+
+    <!-- DEPRIVATION TAB -->
+    <div id="tab-depriv" class="tab-content">
+      <div class="depriv-section">
+        <h3>Index of Multiple Deprivation</h3>
+        <div class="depriv-gauge">
+          <div class="depriv-decile" style="color:${imdColor}">${p.imd}</div>
+          <div class="depriv-info">
+            <div class="depriv-label" style="color:${imdColor}">${imdLabel}</div>
+            <div class="depriv-sub">${imdDesc}</div>
+          </div>
+        </div>
+        <div class="depriv-scale" style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:3px">
+            <span>Most Deprived (1)</span><span>Least Deprived (10)</span>
+          </div>
+          <div class="depriv-scale-bar">
+            <div class="depriv-marker" style="left:${((p.imd-1)/9)*100}%;background:${imdColor}"></div>
+          </div>
+        </div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted);line-height:1.6">
+          <div>📍 Area: <strong style="color:var(--text)">${p.area}</strong></div>
+          <div>📊 IMD Decile: <strong style="color:${imdColor}">${p.imd}/10</strong> (${p.imd>=8?'Top 20%':p.imd>=6?'Top 40%':p.imd>=4?'Bottom 50%':'Bottom 30%'} least deprived in England)</div>
+          <div>🏘️ Census rank: ${p.imd>=9?'Brookside & Walton – #1 least deprived in Chesterfield':p.imd>=8?'Ashgate & Brockwell – top 3 least deprived':p.imd>=6?'Spital & Hasland – mid-range':p.imd>=4?'More deprived neighbourhood':'One of the most deprived areas'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions-section">
+      <a class="action-btn" href="${p.url}" target="_blank"><span class="btn-icon">🏠</span>View on Rightmove</a>
+      <button class="action-btn" onclick="map.setView([${p.lat},${p.lng}],16)"><span class="btn-icon">🗺</span>Centre on map</button>
+    </div>
+  `;
+  // Default to score tab
+  switchTab(document.querySelector('.detail-tab'), 'tab-score');
+}
+
+function switchTab(el, tabId) {
+  document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const tab = document.getElementById(tabId);
+  if (tab) tab.classList.add('active');
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.add('hidden');
+  selectedId = null;
+  document.querySelectorAll('.prop-card').forEach(c => c.classList.remove('selected'));
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.onload = () => {
+  initMap();
+  updateIMDDisplay();
+};
+</script>
+</body>
+</html>
