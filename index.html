@@ -493,22 +493,32 @@
     </div>
     <!-- LEGEND -->
     <div class="legend">
-      <h3>IMD Deprivation Decile</h3>
-      <div class="legend-item"><div class="legend-dot" style="background:#1a7a2e"></div>Decile 9–10 (Least)</div>
+      <h3>📍 Best Value Score</h3>
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px">
+        <div style="flex:1;height:10px;border-radius:5px;background:linear-gradient(to right,#b71c1c,#e53935,#ff9800,#ffc107,#8bc34a,#2da84d,#1a7a2e)"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:6px">
+        <span>0 (poor)</span><span>50</span><span>100 (best)</span>
+      </div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1a7a2e;border:2px solid #1a7a2e"></div><span>80–100 Excellent</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#8bc34a;border:2px solid #8bc34a"></div><span>65–79 Good</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffc107;border:2px solid #ffc107"></div><span>50–64 Average</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ff9800;border:2px solid #ff9800"></div><span>35–49 Below avg</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e53935;border:2px solid #e53935"></div><span>0–34 Poor</span></div>
+      <div class="legend-sep"></div>
+      <h3>🎨 IMD Zone (background)</h3>
+      <div class="legend-item"><div class="legend-dot" style="background:#1a7a2e"></div>Decile 9–10 (Least deprived)</div>
       <div class="legend-item"><div class="legend-dot" style="background:#6abf69"></div>Decile 7–8</div>
       <div class="legend-item"><div class="legend-dot" style="background:#ffcc02"></div>Decile 5–6</div>
       <div class="legend-item"><div class="legend-dot" style="background:#ef6c00"></div>Decile 3–4</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#e53935"></div>Decile 1–2 (Most)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e53935"></div>Decile 1–2 (Most deprived)</div>
       <div class="legend-sep"></div>
-      <h3>Schools</h3>
+      <h3>🏫 Schools</h3>
       <div class="legend-item"><div class="legend-school" style="background:rgba(21,101,192,0.3);color:#64b5f6">★</div>Outstanding</div>
       <div class="legend-item"><div class="legend-school" style="background:rgba(67,160,71,0.3);color:#81c784">●</div>Good</div>
       <div class="legend-item"><div class="legend-school" style="background:rgba(251,140,0,0.3);color:#ffb74d">●</div>Req. Improvement</div>
       <div class="legend-sep"></div>
       <div class="legend-item"><div class="legend-school" style="background:#1a1e2e;color:#ce93d8;border-radius:3px">🚂</div>Train Station</div>
-      <div class="legend-sep"></div>
-      <div style="font-size:10px;color:var(--muted)">📍 = Property pin</div>
-      <div style="font-size:10px;color:var(--muted)">Numbers show Best Value Score</div>
     </div>
   </div>
 
@@ -846,13 +856,26 @@ function renderStations() {
 // ============================================================
 // PROPERTY MARKERS
 // ============================================================
-function getScoreColor(score) {
-  if (score >= 80) return '#2da84d';
-  if (score >= 65) return '#6abf69';
-  if (score >= 50) return '#ffcc02';
-  if (score >= 35) return '#ff9800';
-  return '#e53935';
+// Smooth red → amber → green gradient based on score 0–100
+function scoreToColor(score) {
+  const stops = [
+    {s:0,   r:183, g:28,  b:28 },  // deep red
+    {s:30,  r:229, g:57,  b:53 },  // red
+    {s:45,  r:255, g:152, b:0  },  // orange
+    {s:55,  r:255, g:193, b:7  },  // amber
+    {s:65,  r:139, g:195, b:74 },  // light green
+    {s:80,  r:45,  g:168, b:77 },  // green
+    {s:100, r:26,  g:122, b:46 },  // dark green
+  ];
+  const v = Math.max(0, Math.min(100, score));
+  let lo = stops[0], hi = stops[stops.length-1];
+  for (let i = 0; i < stops.length-1; i++) {
+    if (v >= stops[i].s && v <= stops[i+1].s) { lo = stops[i]; hi = stops[i+1]; break; }
+  }
+  const t = hi.s === lo.s ? 0 : (v - lo.s) / (hi.s - lo.s);
+  return `rgb(${Math.round(lo.r+t*(hi.r-lo.r))},${Math.round(lo.g+t*(hi.g-lo.g))},${Math.round(lo.b+t*(hi.b-lo.b))})`;
 }
+function getScoreColor(score) { return scoreToColor(score); }
 
 function getIMDColor(imd) {
   const colors = {10:'#1a7a2e',9:'#2da84d',8:'#6abf69',7:'#a5d6a7',6:'#fff176',5:'#ffcc02',4:'#ff9800',3:'#ef6c00',2:'#e53935',1:'#b71c1c'};
@@ -863,15 +886,16 @@ function renderMarkers(props) {
   markers.forEach(m => map.removeLayer(m));
   markers = [];
   props.forEach(p => {
-    const color = getIMDColor(p.imd);
-    const scoreCol = getScoreColor(p.score);
+    const imdCol = getIMDColor(p.imd);
+    const scoreCol = scoreToColor(p.score);
+    // Darken the fill slightly for legibility
     const icon = L.divIcon({
       className: '',
-      html: `<div style="position:relative;width:36px;height:36px">
-        <div style="width:32px;height:32px;background:${color}22;border:2.5px solid ${color};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:${color};cursor:pointer">${p.score}</div>
-        <div style="position:absolute;bottom:-2px;right:-2px;width:12px;height:12px;background:${p.beds===4?'#7c4dff':'#5c6bc0'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;color:white;font-weight:700">${p.beds}</div>
+      html: `<div style="position:relative;width:38px;height:38px">
+        <div style="width:34px;height:34px;background:${scoreCol}33;border:2.5px solid ${scoreCol};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:${scoreCol};cursor:pointer;box-shadow:0 2px 6px ${scoreCol}55">${p.score}</div>
+        <div style="position:absolute;bottom:-2px;right:-2px;width:13px;height:13px;background:${p.beds===4?'#7c4dff':'#5c6bc0'};border:1.5px solid #0f1117;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;color:white;font-weight:700">${p.beds}</div>
       </div>`,
-      iconSize: [36, 36], iconAnchor: [18, 18]
+      iconSize: [38, 38], iconAnchor: [19, 19]
     });
     const m = L.marker([p.lat, p.lng], {icon}).addTo(map);
     m.on('click', () => selectProperty(p.id));
@@ -879,7 +903,7 @@ function renderMarkers(props) {
       <div class="popup-title">📍 ${p.address}</div>
       <div class="popup-price">£${p.price.toLocaleString()}</div>
       <div class="popup-row">Bedrooms <span>${p.beds} bed ${p.ptype}</span></div>
-      <div class="popup-row">IMD Decile <span style="color:${color}">▉ ${p.imd}/10</span></div>
+      <div class="popup-row">IMD Decile <span style="color:${imdCol}">▉ ${p.imd}/10</span></div>
       <div class="popup-row">Agent <span>${p.agent}</span></div>
       <div class="popup-score-row">
         <div>
