@@ -71,6 +71,8 @@
   .tag { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
   .tag-bed { background: #1a3a5c; color: #64b5f6; }
   .tag-type { background: #1a2a3a; color: #90caf9; }
+  .tag-size { background: #1a2a2a; color: #4db6ac; }
+  .tag-size-unknown { background: #1e1e2a; color: #546e7a; font-style: italic; }
   .score-badge { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid; }
   .score-excellent { background: rgba(26,122,46,0.2); color: #4caf50; border-color: #4caf50; }
   .score-good { background: rgba(67,160,71,0.2); color: #81c784; border-color: #81c784; }
@@ -245,6 +247,22 @@
         </select>
       </div>
       <div class="filter-group">
+        <div class="filter-label" style="justify-content:space-between">
+          <label class="check-item" style="font-size:11px;gap:5px">
+            <input type="checkbox" id="size-filter-on" onchange="toggleSizeFilter()"> Floor Area Filter
+          </label>
+          <button id="unit-toggle" onclick="toggleSizeUnit()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1px 8px;font-size:10px;color:var(--accent);cursor:pointer">sqft</button>
+        </div>
+        <div id="size-filter-body" style="opacity:0.35;pointer-events:none">
+          <div class="price-display" id="size-display">Min: 600 sqft</div>
+          <input type="range" id="filter-size" min="600" max="1600" step="50" value="600" oninput="updateSizeDisplay(); applyFilters()">
+          <label class="check-item" style="margin-top:5px">
+            <input type="checkbox" id="size-include-unknown" checked onchange="applyFilters()">
+            <span style="font-size:11px">Include properties without size data</span>
+          </label>
+        </div>
+      </div>
+      <div class="filter-group">
         <div class="filter-label">Show on Map</div>
         <div class="check-group">
           <label class="check-item"><input type="checkbox" id="show-schools" checked onchange="toggleSchools()"> 🏫 Schools</label>
@@ -260,6 +278,8 @@
           <option value="price-desc">Price ↓</option>
           <option value="imd-desc">IMD Decile ↓</option>
           <option value="beds">Bedrooms</option>
+          <option value="sqft-desc">Floor Area ↓ (known first)</option>
+          <option value="ppsqft">£ per sqft ↑ (known only)</option>
         </select>
       </div>
     </div>
@@ -402,49 +422,50 @@ function getNearbySchools(lat, lng, radiusKm) {
 // ============================================================
 const PROPERTIES_RAW = [
   // ===== DECILE 9-10: WALTON, BRAMPTON, LOUNDSLEY GREEN =====
-  { id:1,  address:"Newhaven Close, Walton",          area:"Walton",         price:350000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:true,  lat:53.2185,lng:-1.4295, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:2,  address:"Walgrove Road, Walton",            area:"Walton",         price:349950, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:true, extended:true, largeplot:true,  lat:53.2192,lng:-1.4305, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:3,  address:"Storrs Road, Brampton, S40",       area:"Brampton",       price:350000, beds:3, ptype:"Semi-Detached",baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2365,lng:-1.4430, agent:"Redbrik",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:4,  address:"Shaftesbury Avenue, Ashgate, S40", area:"Ashgate",        price:350000, beds:3, ptype:"Semi-Detached",baths:1, imd:9, nochain:true, renovated:true, extended:false,largeplot:false, lat:53.2420,lng:-1.4465, agent:"Purplebricks",   status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:5,  address:"Greenways, Walton",                area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:true, renovated:false,extended:false,largeplot:false, lat:53.2197,lng:-1.4285, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:6,  address:"Moorland View Road, Walton (1)",   area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2205,lng:-1.4312, agent:"Redbrik",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:7,  address:"Lake View Avenue, Walton",         area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2180,lng:-1.4310, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:8,  address:"Wolfe Close, Walton, S40",         area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2210,lng:-1.4298, agent:"Redbrik",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:9,  address:"Horsewood Road, Walton",           area:"Walton",         price:335000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2195,lng:-1.4322, agent:"Strada Estates", status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:10, address:"Orchards Way, Walton",             area:"Walton",         price:335000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2188,lng:-1.4318, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:11, address:"Moorland View Road, Walton (2)",   area:"Walton",         price:330000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2202,lng:-1.4308, agent:"Wards",          status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:12, address:"Storrs Road, Brampton",            area:"Brampton",       price:330000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:true, renovated:false,extended:false,largeplot:true,  lat:53.2348,lng:-1.4428, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:13, address:"Springfield Avenue, Brampton, S40",area:"Brampton",       price:325000, beds:3, ptype:"Semi-Detached",baths:1, imd:9, nochain:false,renovated:true, extended:false,largeplot:false, lat:53.2358,lng:-1.4438, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:14, address:"Old Road, Brampton, S40 3QL",      area:"Brampton",       price:325000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2368,lng:-1.4450, agent:"Hunters",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:15, address:"Woodcote Way, Walton",             area:"Walton",         price:325000, beds:3, ptype:"Detached",     baths:3, imd:9, nochain:true, renovated:false,extended:false,largeplot:false, lat:53.2175,lng:-1.4288, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:16, address:"Thorndon Way, Chesterfield, S40",  area:"Walton",         price:325000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:true, renovated:false,extended:false,largeplot:true,  lat:53.2222,lng:-1.4275, agent:"Pinewood",       status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:17, address:"Ashgate Valley Road, Brockwell",   area:"Brockwell",      price:323000, beds:3, ptype:"Detached",     baths:1, imd:8, nochain:true, renovated:false,extended:false,largeplot:true,  lat:53.2450,lng:-1.4368, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:18, address:"Lansdowne Avenue, Chesterfield, S41",area:"Newbold",      price:340000, beds:3, ptype:"Detached",     baths:2, imd:8, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2490,lng:-1.4125, agent:"Yopa",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:19, address:"Pomegranate Road, Newbold, S41 7BN",area:"Newbold S41 7", price:350000, beds:3, ptype:"Detached",     baths:2, imd:8, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2515,lng:-1.4115, agent:"Dales & Peaks",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:20, address:"Hawksley Avenue, Brockwell",       area:"Brockwell",      price:280000, beds:3, ptype:"Semi-Detached",baths:1, imd:8, nochain:false,renovated:true, extended:false,largeplot:false, lat:53.2445,lng:-1.4358, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  // sqft: confirmed from Rightmove listing text; null = not published by agent
+  { id:1,  address:"Newhaven Close, Walton",          area:"Walton",         price:350000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:true,  sqft:1088, lat:53.2185,lng:-1.4295, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:2,  address:"Walgrove Road, Walton",            area:"Walton",         price:349950, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:true, extended:true, largeplot:true,  sqft:null, lat:53.2192,lng:-1.4305, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:3,  address:"Storrs Road, Brampton, S40",       area:"Brampton",       price:350000, beds:3, ptype:"Semi-Detached",baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2365,lng:-1.4430, agent:"Redbrik",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:4,  address:"Shaftesbury Avenue, Ashgate, S40", area:"Ashgate",        price:350000, beds:3, ptype:"Semi-Detached",baths:1, imd:9, nochain:true, renovated:true, extended:false,largeplot:false, sqft:null, lat:53.2420,lng:-1.4465, agent:"Purplebricks",   status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:5,  address:"Greenways, Walton",                area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:true, renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2197,lng:-1.4285, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:6,  address:"Moorland View Road, Walton (1)",   area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:true, largeplot:false, sqft:null, lat:53.2205,lng:-1.4312, agent:"Redbrik",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:7,  address:"Lake View Avenue, Walton",         area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2180,lng:-1.4310, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:8,  address:"Wolfe Close, Walton, S40",         area:"Walton",         price:340000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2210,lng:-1.4298, agent:"Redbrik",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:9,  address:"Horsewood Road, Walton",           area:"Walton",         price:335000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:true, largeplot:false, sqft:null, lat:53.2195,lng:-1.4322, agent:"Strada Estates", status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:10, address:"Orchards Way, Walton",             area:"Walton",         price:335000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:true, largeplot:false, sqft:null, lat:53.2188,lng:-1.4318, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:11, address:"Moorland View Road, Walton (2)",   area:"Walton",         price:330000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2202,lng:-1.4308, agent:"Wards",          status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:12, address:"Storrs Road, Brampton",            area:"Brampton",       price:330000, beds:3, ptype:"Detached",     baths:1, imd:9, nochain:true, renovated:false,extended:false,largeplot:true,  sqft:null, lat:53.2348,lng:-1.4428, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:13, address:"Springfield Avenue, Brampton, S40",area:"Brampton",       price:325000, beds:3, ptype:"Semi-Detached",baths:1, imd:9, nochain:false,renovated:true, extended:false,largeplot:false, sqft:null, lat:53.2358,lng:-1.4438, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:14, address:"Old Road, Brampton, S40 3QL",      area:"Brampton",       price:325000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2368,lng:-1.4450, agent:"Hunters",        status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:15, address:"Woodcote Way, Walton",             area:"Walton",         price:325000, beds:3, ptype:"Detached",     baths:3, imd:9, nochain:true, renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2175,lng:-1.4288, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:16, address:"Thorndon Way, Chesterfield, S40",  area:"Walton",         price:325000, beds:3, ptype:"Detached",     baths:2, imd:9, nochain:true, renovated:false,extended:false,largeplot:true,  sqft:null, lat:53.2222,lng:-1.4275, agent:"Pinewood",       status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:17, address:"Ashgate Valley Road, Brockwell",   area:"Brockwell",      price:323000, beds:3, ptype:"Detached",     baths:1, imd:8, nochain:true, renovated:false,extended:false,largeplot:true,  sqft:903,  lat:53.2450,lng:-1.4368, agent:"Wilkins Vardy",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:18, address:"Lansdowne Avenue, Chesterfield, S41",area:"Newbold",      price:340000, beds:3, ptype:"Detached",     baths:2, imd:8, nochain:false,renovated:false,extended:true, largeplot:false, sqft:null, lat:53.2490,lng:-1.4125, agent:"Yopa",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:19, address:"Pomegranate Road, Newbold, S41 7BN",area:"Newbold S41 7", price:350000, beds:3, ptype:"Detached",     baths:2, imd:8, nochain:false,renovated:false,extended:false,largeplot:false, sqft:1227, lat:53.2515,lng:-1.4115, agent:"Dales & Peaks",  status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:20, address:"Hawksley Avenue, Brockwell",       area:"Brockwell",      price:280000, beds:3, ptype:"Semi-Detached",baths:1, imd:8, nochain:false,renovated:true, extended:false,largeplot:false, sqft:null, lat:53.2445,lng:-1.4358, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
   // 4-BED LEAST DEPRIVED
-  { id:21, address:"Linacre Road, Loundsley Green, S40 4UX",area:"Loundsley Green",price:331995,beds:4,ptype:"Detached",  baths:2, imd:10,nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2258,lng:-1.4468, agent:"Tilia Homes",   status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:22, address:"St Giles Close, Chesterfield, S40",area:"Walton",          price:330000, beds:4, ptype:"Detached",     baths:3, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2240,lng:-1.4420, agent:"Pinewood",       status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:23, address:"Chatsworth Road, Brampton",        area:"Brampton",       price:315000, beds:4, ptype:"Semi-Detached",baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2342,lng:-1.4415, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:24, address:"Old Road, Brampton (4 bed)",       area:"Brampton",       price:312000, beds:4, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:true, extended:false,largeplot:false, lat:53.2370,lng:-1.4455, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:25, address:"Langdale Close, Linacre Woods, S40",area:"Loundsley Green",price:305000, beds:4, ptype:"Detached",     baths:2, imd:10,nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2250,lng:-1.4475, agent:"Strada",         status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:26, address:"Brockwell Lane, Brockwell",        area:"Brockwell",      price:299950, beds:4, ptype:"Detached",     baths:2, imd:8, nochain:false,renovated:false,extended:false,largeplot:true,  lat:53.2448,lng:-1.4345, agent:"W.T. Parker",    status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:27, address:"Weston Close, Chesterfield, S40",  area:"Walton",         price:295000, beds:4, ptype:"Semi-Detached",baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2232,lng:-1.4292, agent:"Purplebricks",   status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:28, address:"Trevorrow Crescent, Chesterfield, S40",area:"Walton",     price:292000, beds:4, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2215,lng:-1.4265, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:29, address:"Woodcote Way, Walton (4 bed)",     area:"Walton",         price:288000, beds:4, ptype:"Semi-Detached",baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2178,lng:-1.4285, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:30, address:"Grampian Crescent, Loundsley Green",area:"Loundsley Green",price:282000, beds:4, ptype:"Semi-Detached",baths:2, imd:10,nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2265,lng:-1.4480, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:21, address:"Linacre Road, Loundsley Green, S40 4UX",area:"Loundsley Green",price:331995,beds:4,ptype:"Detached",  baths:2, imd:10,nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2258,lng:-1.4468, agent:"Tilia Homes",   status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:22, address:"St Giles Close, Chesterfield, S40",area:"Walton",          price:330000, beds:4, ptype:"Detached",     baths:3, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2240,lng:-1.4420, agent:"Pinewood",       status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:23, address:"Chatsworth Road, Brampton",        area:"Brampton",       price:315000, beds:4, ptype:"Semi-Detached",baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2342,lng:-1.4415, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:24, address:"Old Road, Brampton (4 bed)",       area:"Brampton",       price:312000, beds:4, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:true, extended:false,largeplot:false, sqft:null, lat:53.2370,lng:-1.4455, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:25, address:"Langdale Close, Linacre Woods, S40",area:"Loundsley Green",price:305000, beds:4, ptype:"Detached",     baths:2, imd:10,nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2250,lng:-1.4475, agent:"Strada",         status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:26, address:"Brockwell Lane, Brockwell",        area:"Brockwell",      price:299950, beds:4, ptype:"Detached",     baths:2, imd:8, nochain:false,renovated:false,extended:false,largeplot:true,  sqft:null, lat:53.2448,lng:-1.4345, agent:"W.T. Parker",    status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:27, address:"Weston Close, Chesterfield, S40",  area:"Walton",         price:295000, beds:4, ptype:"Semi-Detached",baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2232,lng:-1.4292, agent:"Purplebricks",   status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:28, address:"Trevorrow Crescent, Chesterfield, S40",area:"Walton",     price:292000, beds:4, ptype:"Detached",     baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2215,lng:-1.4265, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:29, address:"Woodcote Way, Walton (4 bed)",     area:"Walton",         price:288000, beds:4, ptype:"Semi-Detached",baths:2, imd:9, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2178,lng:-1.4285, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:30, address:"Grampian Crescent, Loundsley Green",area:"Loundsley Green",price:282000, beds:4, ptype:"Semi-Detached",baths:2, imd:10,nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2265,lng:-1.4480, agent:"Haus",           status:"✅ Recommended", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
   // ===== DECILE 5-6: HASLAND (CAUTION) =====
-  { id:31, address:"Broomfield Avenue, Hasland",       area:"Hasland",        price:325000, beds:3, ptype:"Detached",     baths:1, imd:6, nochain:true, renovated:true, extended:false,largeplot:false, lat:53.2175,lng:-1.4045, agent:"Haus",           status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:32, address:"Norwood Avenue, Hasland, S41 0NH", area:"Hasland",        price:318500, beds:3, ptype:"Detached",     baths:2, imd:6, nochain:false,renovated:false,extended:false,largeplot:true,  lat:53.2165,lng:-1.4038, agent:"Hunters",        status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:33, address:"Hady Lane, Chesterfield, S41",     area:"Hady",           price:315000, beds:3, ptype:"Semi-Detached",baths:2, imd:5, nochain:false,renovated:false,extended:true, largeplot:false, lat:53.2355,lng:-1.4105, agent:"Redbrik",        status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:34, address:"Marine Drive, Chesterfield, S41 0FG",area:"Hady/Spire",  price:315000, beds:4, ptype:"Detached",     baths:2, imd:5, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2315,lng:-1.4080, agent:"Pinewood",       status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:35, address:"Opal Street, Hasland, S41",        area:"Hasland",        price:325000, beds:4, ptype:"Detached",     baths:2, imd:6, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2168,lng:-1.4028, agent:"Hunters",        status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:31, address:"Broomfield Avenue, Hasland",       area:"Hasland",        price:325000, beds:3, ptype:"Detached",     baths:1, imd:6, nochain:true, renovated:true, extended:false,largeplot:false, sqft:null, lat:53.2175,lng:-1.4045, agent:"Haus",           status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:32, address:"Norwood Avenue, Hasland, S41 0NH", area:"Hasland",        price:318500, beds:3, ptype:"Detached",     baths:2, imd:6, nochain:false,renovated:false,extended:false,largeplot:true,  sqft:null, lat:53.2165,lng:-1.4038, agent:"Hunters",        status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:33, address:"Hady Lane, Chesterfield, S41",     area:"Hady",           price:315000, beds:3, ptype:"Semi-Detached",baths:2, imd:5, nochain:false,renovated:false,extended:true, largeplot:false, sqft:null, lat:53.2355,lng:-1.4105, agent:"Redbrik",        status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:34, address:"Marine Drive, Chesterfield, S41 0FG",area:"Hady/Spire",  price:315000, beds:4, ptype:"Detached",     baths:2, imd:5, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2315,lng:-1.4080, agent:"Pinewood",       status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:35, address:"Opal Street, Hasland, S41",        area:"Hasland",        price:325000, beds:4, ptype:"Detached",     baths:2, imd:6, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2168,lng:-1.4028, agent:"Hunters",        status:"⚠️ Caution", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
   // ===== DECILE 1-4: AVOID =====
-  { id:36, address:"Layton Drive, Old Whittington",    area:"Old Whittington", price:345000, beds:3, ptype:"House",       baths:2, imd:4, nochain:false,renovated:false,extended:true, largeplot:true,  lat:53.2688,lng:-1.4025, agent:"W.T. Parker",   status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:37, address:"Whinfell Road, Newbold, S41 8ES",  area:"Newbold S41 8",  price:309950, beds:3, ptype:"Detached",     baths:2, imd:3, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2582,lng:-1.4018, agent:"Pinewood",       status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:38, address:"Spire Heights, Chesterfield, S41", area:"Spire/Dunston",  price:340000, beds:4, ptype:"Detached",     baths:2, imd:4, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2298,lng:-1.4065, agent:"Redbrik",        status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:39, address:"Comley Crescent, Chesterfield, S41 9SH",area:"Dunston",  price:350000, beds:4, ptype:"Detached",     baths:2, imd:2, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2392,lng:-1.3868, agent:"Unknown",        status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
-  { id:40, address:"Rutland Road, Chesterfield, S40 1LZ",area:"Town Centre",  price:275000, beds:4, ptype:"Terraced",     baths:1, imd:4, nochain:false,renovated:false,extended:false,largeplot:false, lat:53.2390,lng:-1.4185, agent:"Purplebricks",   status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:36, address:"Layton Drive, Old Whittington",    area:"Old Whittington", price:345000, beds:3, ptype:"House",       baths:2, imd:4, nochain:false,renovated:false,extended:true, largeplot:true,  sqft:null, lat:53.2688,lng:-1.4025, agent:"W.T. Parker",   status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:37, address:"Whinfell Road, Newbold, S41 8ES",  area:"Newbold S41 8",  price:309950, beds:3, ptype:"Detached",     baths:2, imd:3, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2582,lng:-1.4018, agent:"Pinewood",       status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:38, address:"Spire Heights, Chesterfield, S41", area:"Spire/Dunston",  price:340000, beds:4, ptype:"Detached",     baths:2, imd:4, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2298,lng:-1.4065, agent:"Redbrik",        status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:39, address:"Comley Crescent, Chesterfield, S41 9SH",area:"Dunston",  price:350000, beds:4, ptype:"Detached",     baths:2, imd:2, nochain:false,renovated:false,extended:false,largeplot:false, sqft:1300, lat:53.2392,lng:-1.3868, agent:"Unknown",        status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
+  { id:40, address:"Rutland Road, Chesterfield, S40 1LZ",area:"Town Centre",  price:275000, beds:4, ptype:"Terraced",     baths:1, imd:4, nochain:false,renovated:false,extended:false,largeplot:false, sqft:null, lat:53.2390,lng:-1.4185, agent:"Purplebricks",   status:"❌ Avoid", url:"https://www.rightmove.co.uk/property-for-sale/Chesterfield.html" },
 ];
 
 // Pre-calculate scores
@@ -629,6 +650,53 @@ function updateIMDDisplay() {
   document.getElementById('imd-val').textContent = `${v}+`;
 }
 
+// ---- SIZE FILTER HELPERS ----
+let sizeUnit = 'sqft'; // or 'sqm'
+
+function sqftToSqm(v) { return Math.round(v * 0.0929); }
+function sqmToSqft(v) { return Math.round(v / 0.0929); }
+
+function toggleSizeFilter() {
+  const on = document.getElementById('size-filter-on').checked;
+  const body = document.getElementById('size-filter-body');
+  body.style.opacity = on ? '1' : '0.35';
+  body.style.pointerEvents = on ? 'auto' : 'none';
+  applyFilters();
+}
+
+function toggleSizeUnit() {
+  sizeUnit = sizeUnit === 'sqft' ? 'sqm' : 'sqft';
+  document.getElementById('unit-toggle').textContent = sizeUnit;
+  const slider = document.getElementById('filter-size');
+  if (sizeUnit === 'sqm') {
+    const curSqft = +slider.value;
+    slider.min = 56; slider.max = 149; slider.step = 5;
+    slider.value = sqftToSqm(curSqft);
+  } else {
+    const curSqm = +slider.value;
+    slider.min = 600; slider.max = 1600; slider.step = 50;
+    slider.value = sqmToSqft(curSqm);
+  }
+  updateSizeDisplay();
+  applyFilters();
+}
+
+function updateSizeDisplay() {
+  const v = +document.getElementById('filter-size').value;
+  document.getElementById('size-display').textContent = `Min: ${v} ${sizeUnit}`;
+}
+
+function formatSize(sqft) {
+  if (sqft === null) return null;
+  if (sizeUnit === 'sqm') return `${sqftToSqm(sqft)} sqm`;
+  return `${sqft} sqft`;
+}
+
+function pricePer(price, sqft) {
+  if (!sqft) return null;
+  return `£${Math.round(price / sqft)}/sqft`;
+}
+
 function applyFilters() {
   const minPrice = +document.getElementById('price-min').value;
   const maxPrice = +document.getElementById('price-max').value;
@@ -638,6 +706,11 @@ function applyFilters() {
   const showAvoid = document.getElementById('show-avoid').checked;
   const search = document.getElementById('search-input').value.toLowerCase();
   const sortBy = document.getElementById('sort-by').value;
+
+  const sizeFilterOn = document.getElementById('size-filter-on').checked;
+  const includeUnknownSize = document.getElementById('size-include-unknown').checked;
+  const rawSizeMin = +document.getElementById('filter-size').value;
+  const sizeMinSqft = sizeUnit === 'sqm' ? sqmToSqft(rawSizeMin) : rawSizeMin;
 
   let filtered = PROPERTIES.filter(p => {
     if (p.price < minPrice || p.price > maxPrice) return false;
@@ -652,6 +725,10 @@ function applyFilters() {
       if (schoolFilter === 'outstanding' && !hasOutstanding) return false;
       if (schoolFilter === 'good' && !hasGoodPlus) return false;
     }
+    if (sizeFilterOn) {
+      if (p.sqft === null) { if (!includeUnknownSize) return false; }
+      else if (p.sqft < sizeMinSqft) return false;
+    }
     return true;
   });
 
@@ -663,6 +740,12 @@ function applyFilters() {
       case 'price-desc': return b.price - a.price;
       case 'imd-desc': return b.imd - a.imd;
       case 'beds': return b.beds - a.beds;
+      case 'sqft-desc': return (b.sqft || 0) - (a.sqft || 0);
+      case 'ppsqft': {
+        const pa = a.sqft ? a.price/a.sqft : Infinity;
+        const pb = b.sqft ? b.price/b.sqft : Infinity;
+        return pa - pb;
+      }
       default: return b.score - a.score;
     }
   });
@@ -689,6 +772,14 @@ function resetFilters() {
   document.getElementById('sort-by').value = 'score';
   document.getElementById('show-schools').checked = true;
   document.getElementById('show-zones').checked = true;
+  document.getElementById('size-filter-on').checked = false;
+  document.getElementById('filter-size').min = 600; document.getElementById('filter-size').max = 1600; document.getElementById('filter-size').step = 50;
+  document.getElementById('filter-size').value = 600;
+  document.getElementById('size-include-unknown').checked = true;
+  document.getElementById('unit-toggle').textContent = 'sqft';
+  sizeUnit = 'sqft';
+  toggleSizeFilter();
+  updateSizeDisplay();
   updatePriceDisplay();
   updateIMDDisplay();
   toggleSchools();
@@ -725,6 +816,7 @@ function renderList(props) {
         <span class="tag tag-type">${p.ptype}</span>
         ${p.nochain?'<span class="tag" style="background:#1a3a2a;color:#66bb6a">No chain</span>':''}
         ${p.renovated?'<span class="tag" style="background:#2a2a1a;color:#ffd54f">Renovated</span>':''}
+        ${p.sqft ? `<span class="tag tag-size">${formatSize(p.sqft)}</span>` : '<span class="tag tag-size-unknown">size not listed</span>'}
       </div>
       <div class="prop-meta">
         <div class="imd-dot" style="background:${getIMDColor(p.imd)}"></div>
@@ -774,6 +866,8 @@ function selectProperty(id) {
         ${p.renovated?'<span class="chip" style="color:#ffd54f">✓ Renovated</span>':''}
         ${p.extended?'<span class="chip" style="color:#4fc3f7">↔ Extended</span>':''}
         ${p.largeplot?'<span class="chip" style="color:#aed581">🌳 Large Plot</span>':''}
+        ${p.sqft ? `<span class="chip" style="color:#4db6ac">📐 ${p.sqft} sqft / ${sqftToSqm(p.sqft)} sqm</span>` : '<span class="chip" style="color:#546e7a">📐 Size not listed</span>'}
+        ${p.sqft ? `<span class="chip" style="color:#80cbc4">£${Math.round(p.price/p.sqft)}/sqft</span>` : ''}
       </div>
       <div style="font-size:11px;color:var(--muted)">Agent: ${p.agent} &nbsp;|&nbsp; ${p.status}</div>
     </div>
