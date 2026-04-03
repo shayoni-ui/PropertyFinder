@@ -645,11 +645,14 @@ let osmLayer, satelliteLayer;
 
 function initMap() {
   map = L.map('map', { zoomControl: true, tap: true }).setView([53.2300, -1.4250], 13);
-  osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors', maxZoom: 19
+  // CartoDB Voyager — free, no API key, no referrer restrictions, works on file:// and GitHub Pages
+  osmLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+    subdomains: 'abcd', maxZoom: 20
   });
+  // Esri satellite — reliable fallback, no key needed for standard usage
   satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: '© Esri', maxZoom: 19
+    attribution: '© Esri, Maxar, Earthstar Geographics', maxZoom: 19
   });
   osmLayer.addTo(map);
   renderZones();
