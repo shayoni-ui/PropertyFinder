@@ -193,6 +193,114 @@
   .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab-content { display: none; }
   .tab-content.active { display: block; }
+
+  /* TRAIN STATION tag */
+  .tag-train { background: #1a1e2e; color: #ce93d8; }
+
+  /* ============================================================
+     MOBILE RESPONSIVE
+     ============================================================ */
+
+  /* Mobile FAB bar — hidden on desktop */
+  .mobile-bottom-bar { display: none; }
+
+  /* Bottom sheet drag handle */
+  .sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 10px auto 0; }
+
+  /* Mobile overlay backdrop */
+  .mob-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 880; }
+  .mob-backdrop.show { display: block; }
+
+  @media (max-width: 767px) {
+
+    /* Header: compact */
+    header { padding: 8px 14px; }
+    .logo h1 { font-size: 15px; }
+    .logo span { display: none; }
+    .header-stats { gap: 12px; }
+    .stat-val { font-size: 16px; }
+    .stat-label { font-size: 10px; }
+
+    /* Full-screen map */
+    .app { position: relative; }
+    .map-wrapper { position: absolute; inset: 0; }
+
+    /* Sidebar as bottom sheet */
+    .sidebar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      width: 100% !important; height: 78vh;
+      border-radius: 16px 16px 0 0; border-right: none;
+      border-top: 1px solid var(--border);
+      transform: translateY(100%);
+      transition: transform 0.32s cubic-bezier(0.4,0,0.2,1);
+      z-index: 900; overflow: hidden;
+    }
+    .sidebar.mob-open { transform: translateY(0); }
+
+    /* Detail panel as bottom sheet */
+    .detail-panel {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      width: 100% !important; height: 82vh;
+      border-radius: 16px 16px 0 0; border-left: none;
+      border-top: 1px solid var(--border);
+      transform: translateY(100%);
+      transition: transform 0.32s cubic-bezier(0.4,0,0.2,1);
+      z-index: 910; overflow: hidden;
+    }
+    .detail-panel:not(.hidden) { transform: translateY(0); }
+    .detail-panel.hidden { transform: translateY(100%); width: 100% !important; }
+    .detail-inner { width: 100%; }
+
+    /* Legend: smaller, top-left */
+    .legend { bottom: auto; top: 10px; left: 10px; font-size: 10px; padding: 7px 10px; min-width: 130px; }
+    .legend h3 { font-size: 9px; margin-bottom: 5px; }
+    .legend-item { margin-bottom: 3px; }
+
+    /* Map controls: top right, smaller */
+    .map-controls { top: 8px; right: 8px; gap: 4px; }
+    .map-toggle { padding: 5px 8px; font-size: 10px; }
+
+    /* Bottom navigation bar */
+    .mobile-bottom-bar {
+      display: flex; position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--surface); border-top: 1px solid var(--border);
+      z-index: 800; padding: 6px 0 max(6px, env(safe-area-inset-bottom));
+    }
+    .mob-nav-btn {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      gap: 2px; padding: 4px; background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 10px; transition: color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mob-nav-btn .nav-icon { font-size: 20px; line-height: 1; }
+    .mob-nav-btn.active { color: var(--accent); }
+    .mob-nav-badge {
+      position: absolute; top: 2px; right: calc(50% - 18px);
+      background: var(--accent); color: white; border-radius: 8px;
+      font-size: 9px; font-weight: 700; padding: 0 4px; min-width: 14px;
+      text-align: center; line-height: 14px;
+    }
+    .mob-nav-btn { position: relative; }
+
+    /* Larger touch targets on mobile */
+    select { padding: 9px 10px; font-size: 13px; }
+    .check-item { padding: 4px 0; }
+    .check-item input[type=checkbox] { width: 18px; height: 18px; }
+    input[type=range] { height: 20px; }
+    .btn { padding: 10px 16px; font-size: 13px; }
+    .search-input { padding: 10px 10px 10px 32px; font-size: 13px; }
+    .prop-card { padding: 12px 14px; }
+    .prop-address { font-size: 13px; }
+    .prop-price { font-size: 15px; }
+
+    /* Popup smaller on mobile */
+    .leaflet-popup-content-wrapper { max-width: 220px !important; }
+  }
+
+  @media (max-width: 380px) {
+    .header-stats { display: none; }
+    .logo-icon { width: 28px; height: 28px; font-size: 15px; }
+  }
 </style>
 </head>
 <body>
@@ -215,7 +323,8 @@
 
 <div class="app">
   <!-- SIDEBAR -->
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
+    <div class="sheet-handle" onclick="closeMobileSheets()"></div>
     <div class="sidebar-header">
       <h2>Filters</h2>
       <div class="filter-group">
@@ -318,6 +427,8 @@
       <div class="legend-item"><div class="legend-school" style="background:rgba(67,160,71,0.3);color:#81c784">●</div>Good</div>
       <div class="legend-item"><div class="legend-school" style="background:rgba(251,140,0,0.3);color:#ffb74d">●</div>Req. Improvement</div>
       <div class="legend-sep"></div>
+      <div class="legend-item"><div class="legend-school" style="background:#1a1e2e;color:#ce93d8;border-radius:3px">🚂</div>Train Station</div>
+      <div class="legend-sep"></div>
       <div style="font-size:10px;color:var(--muted)">📍 = Property pin</div>
       <div style="font-size:10px;color:var(--muted)">Numbers show Best Value Score</div>
     </div>
@@ -325,10 +436,28 @@
 
   <!-- DETAIL PANEL -->
   <div class="detail-panel hidden" id="detail-panel">
+    <div class="sheet-handle" id="detail-handle" onclick="closeDetail()"></div>
     <div class="detail-inner" id="detail-inner">
       <!-- filled by JS -->
     </div>
   </div>
+</div>
+
+<!-- MOBILE BACKDROP -->
+<div class="mob-backdrop" id="mob-backdrop" onclick="closeMobileSheets()"></div>
+
+<!-- MOBILE BOTTOM NAV -->
+<div class="mobile-bottom-bar">
+  <button class="mob-nav-btn" id="mob-map-btn" onclick="mobileShowMap()">
+    <span class="nav-icon">🗺</span>Map
+  </button>
+  <button class="mob-nav-btn active" id="mob-filter-btn" onclick="mobileToggleSidebar()">
+    <span class="nav-icon">🔍</span>Filters
+    <span class="mob-nav-badge" id="mob-count">40</span>
+  </button>
+  <button class="mob-nav-btn" id="mob-list-btn" onclick="mobileToggleSidebar('list')">
+    <span class="nav-icon">📋</span>List
+  </button>
 </div>
 
 <script>
@@ -475,6 +604,22 @@ const PROPERTIES = PROPERTIES_RAW.map(p => {
 });
 
 // ============================================================
+// TRAIN STATIONS
+// ============================================================
+const TRAIN_STATIONS = [
+  { name:"Chesterfield",  code:"CHD", lat:53.2348, lng:-1.4208, line:"Midland Main Line",   services:"London St Pancras · Sheffield · Derby · Nottingham" },
+  { name:"Dronfield",     code:"DRO", lat:53.3002, lng:-1.4680, line:"Midland Main Line",   services:"Sheffield · Chesterfield" },
+  { name:"Alfreton",      code:"ALF", lat:53.0979, lng:-1.3814, line:"Midland Main Line",   services:"Sheffield · Nottingham · London" },
+];
+
+function getNearestStation(lat, lng) {
+  return TRAIN_STATIONS.map(s => ({...s, dist: haversine(lat, lng, s.lat, s.lng)}))
+    .sort((a,b) => a.dist - b.dist)[0];
+}
+
+function kmToMiles(km) { return (km * 0.621371).toFixed(1); }
+
+// ============================================================
 // DEPRIVATION ZONES (approximate circles per area)
 // ============================================================
 const ZONES = [
@@ -495,11 +640,11 @@ const ZONES = [
 // ============================================================
 // MAP INIT
 // ============================================================
-let map, markers = [], schoolMarkers = [], zoneCircles = [], selectedId = null;
+let map, markers = [], schoolMarkers = [], zoneCircles = [], stationMarkers = [], selectedId = null;
 let osmLayer, satelliteLayer;
 
 function initMap() {
-  map = L.map('map', { zoomControl: true }).setView([53.2300, -1.4250], 13);
+  map = L.map('map', { zoomControl: true, tap: true }).setView([53.2300, -1.4250], 13);
   osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors', maxZoom: 19
   });
@@ -509,6 +654,7 @@ function initMap() {
   osmLayer.addTo(map);
   renderZones();
   renderSchools();
+  renderStations();
   applyFilters();
 }
 
@@ -578,6 +724,28 @@ function renderSchools() {
 function toggleSchools() {
   const show = document.getElementById('show-schools').checked;
   schoolMarkers.forEach(m => show ? m.addTo(map) : map.removeLayer(m));
+}
+
+// ============================================================
+// TRAIN STATION MARKERS
+// ============================================================
+function renderStations() {
+  stationMarkers.forEach(m => map.removeLayer(m));
+  stationMarkers = [];
+  TRAIN_STATIONS.forEach(s => {
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:28px;height:28px;background:#1a1e2e;border:2px solid #ce93d8;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,0.5)">🚂</div>`,
+      iconSize: [28, 28], iconAnchor: [14, 14]
+    });
+    const m = L.marker([s.lat, s.lng], {icon, zIndexOffset: 200}).addTo(map);
+    m.bindPopup(`
+      <div class="school-popup-title">🚂 ${s.name} Station</div>
+      <div class="school-popup-sub">${s.code} · ${s.line}</div>
+      <div class="popup-row">Services <span style="font-size:10px">${s.services}</span></div>
+    `, {maxWidth: 220});
+    stationMarkers.push(m);
+  });
 }
 
 // ============================================================
@@ -820,7 +988,7 @@ function renderList(props) {
       </div>
       <div class="prop-meta">
         <div class="imd-dot" style="background:${getIMDColor(p.imd)}"></div>
-        <div class="prop-meta-text">IMD Decile ${p.imd} • ${p.area} • ${p.agent}</div>
+        <div class="prop-meta-text">IMD ${p.imd} • ${p.area} • 🚂 ${(()=>{const st=getNearestStation(p.lat,p.lng);return `${kmToMiles(st.dist)}mi to ${st.name}`;})()}</div>
       </div>
     </div>
   `).join('');
@@ -868,6 +1036,7 @@ function selectProperty(id) {
         ${p.largeplot?'<span class="chip" style="color:#aed581">🌳 Large Plot</span>':''}
         ${p.sqft ? `<span class="chip" style="color:#4db6ac">📐 ${p.sqft} sqft / ${sqftToSqm(p.sqft)} sqm</span>` : '<span class="chip" style="color:#546e7a">📐 Size not listed</span>'}
         ${p.sqft ? `<span class="chip" style="color:#80cbc4">£${Math.round(p.price/p.sqft)}/sqft</span>` : ''}
+        ${(()=>{const st=getNearestStation(p.lat,p.lng);return `<span class="chip" style="color:#ce93d8">🚂 ${kmToMiles(st.dist)} mi to ${st.name}</span>`;})()}
       </div>
       <div style="font-size:11px;color:var(--muted)">Agent: ${p.agent} &nbsp;|&nbsp; ${p.status}</div>
     </div>
@@ -907,6 +1076,28 @@ function selectProperty(id) {
         <div style="margin-top:10px;font-size:10px;color:var(--muted);line-height:1.5;padding:8px;background:var(--surface2);border-radius:6px">
           <strong style="color:var(--text)">Algorithm:</strong> IMD Decile (35%) + Price vs budget (25%) + Nearest school Ofsted/results (25%) + Property features (15%)
         </div>
+      </div>
+      <!-- TRAIN STATIONS IN SCORE TAB -->
+      <div class="score-section" style="border-bottom:none">
+        <h3>🚂 Nearest Train Stations</h3>
+        ${(()=>{
+          const allStations = TRAIN_STATIONS.map(s=>({...s, dist:haversine(p.lat,p.lng,s.lat,s.lng)})).sort((a,b)=>a.dist-b.dist);
+          return allStations.map((s,i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:7px 0;${i<allStations.length-1?'border-bottom:1px solid var(--border)':''}">
+              <div style="width:32px;height:32px;background:#1a1e2e;border:1.5px solid #ce93d8;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🚂</div>
+              <div style="flex:1">
+                <div style="font-size:12px;font-weight:600">${s.name} <span style="color:#ce93d8;font-size:10px">(${s.code})</span></div>
+                <div style="font-size:10px;color:var(--muted)">${s.line}</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:1px;font-style:italic">${s.services}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:14px;font-weight:700;color:${i===0?'#ce93d8':'var(--muted)'}">${kmToMiles(s.dist)} mi</div>
+                <div style="font-size:10px;color:var(--muted)">${s.dist.toFixed(1)} km</div>
+                ${i===0?'<div style="font-size:9px;color:#ce93d8;font-weight:600">nearest</div>':''}
+              </div>
+            </div>
+          `).join('');
+        })()}
       </div>
     </div>
 
@@ -982,7 +1173,84 @@ function closeDetail() {
   document.getElementById('detail-panel').classList.add('hidden');
   selectedId = null;
   document.querySelectorAll('.prop-card').forEach(c => c.classList.remove('selected'));
+  // On mobile, close backdrop too
+  document.getElementById('mob-backdrop').classList.remove('show');
 }
+
+// ============================================================
+// MOBILE FUNCTIONS
+// ============================================================
+function isMobile() { return window.innerWidth <= 767; }
+
+function mobileShowMap() {
+  closeMobileSheets();
+  document.getElementById('mob-map-btn').classList.add('active');
+  document.getElementById('mob-filter-btn').classList.remove('active');
+  document.getElementById('mob-list-btn').classList.remove('active');
+  map.invalidateSize();
+}
+
+function mobileToggleSidebar(mode) {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('mob-backdrop');
+  const isOpen = sidebar.classList.contains('mob-open');
+  if (isOpen) {
+    closeMobileSheets();
+  } else {
+    sidebar.classList.add('mob-open');
+    backdrop.classList.add('show');
+    // Scroll to top of list if 'list' mode
+    if (mode === 'list') {
+      const list = document.getElementById('prop-list');
+      if (list) list.scrollTop = 0;
+    }
+    document.getElementById('mob-filter-btn').classList.add('active');
+    document.getElementById('mob-list-btn').classList.add('active');
+    document.getElementById('mob-map-btn').classList.remove('active');
+  }
+}
+
+function closeMobileSheets() {
+  document.getElementById('sidebar').classList.remove('mob-open');
+  document.getElementById('detail-panel').classList.add('hidden');
+  document.getElementById('mob-backdrop').classList.remove('show');
+  document.getElementById('mob-map-btn').classList.add('active');
+  document.getElementById('mob-filter-btn').classList.remove('active');
+  document.getElementById('mob-list-btn').classList.remove('active');
+  selectedId = null;
+  document.querySelectorAll('.prop-card').forEach(c => c.classList.remove('selected'));
+}
+
+// On mobile, selecting a property opens detail sheet + closes sidebar
+const _origSelectProperty = selectProperty;
+function selectProperty(id) {
+  _origSelectProperty(id);
+  if (isMobile()) {
+    document.getElementById('sidebar').classList.remove('mob-open');
+    document.getElementById('mob-backdrop').classList.add('show');
+    document.getElementById('mob-map-btn').classList.remove('active');
+    document.getElementById('mob-filter-btn').classList.remove('active');
+  }
+}
+
+// Update mobile badge count whenever filter changes
+const _origApplyFilters = applyFilters;
+function applyFilters() {
+  _origApplyFilters();
+  const shown = document.getElementById('hdr-shown').textContent;
+  const badge = document.getElementById('mob-count');
+  if (badge) badge.textContent = shown;
+}
+
+// Handle resize — reset transforms if switching to desktop
+window.addEventListener('resize', () => {
+  if (!isMobile()) {
+    document.getElementById('sidebar').classList.remove('mob-open');
+    document.getElementById('detail-panel').classList.remove('hidden');
+    document.getElementById('mob-backdrop').classList.remove('show');
+  }
+  map.invalidateSize();
+});
 
 // ============================================================
 // INIT
@@ -990,6 +1258,11 @@ function closeDetail() {
 window.onload = () => {
   initMap();
   updateIMDDisplay();
+  updateSizeDisplay();
+  // Mobile: start with map showing, sidebar hidden
+  if (isMobile()) {
+    mobileShowMap();
+  }
 };
 </script>
 </body>
