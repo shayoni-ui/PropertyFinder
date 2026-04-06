@@ -1,12 +1,25 @@
 // Vercel serverless function — proxies Rightmove search + enriches with IMD decile
 // Route: GET /api/search?postcode=CV37+8FH&radius=1.0&minBeds=3&minPrice=0&maxPrice=500000
 
-const BROWSER_HEADERS = {
+const BASE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'en-GB,en;q=0.9',
-  'Cache-Control': 'no-cache',
+  'Accept-Encoding': 'gzip, deflate, br',
 };
+
+// Grab Rightmove session cookies so the typeahead returns JSON instead of HTML
+async function getRightmoveCookies() {
+  try {
+    const resp = await fetch('https://www.rightmove.co.uk/', {
+      headers: { ...BASE_HEADERS, 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8' },
+      redirect: 'follow',
+    });
+    const setCookies = resp.headers.getSetCookie ? resp.headers.getSetCookie() : [];
+    return setCookies.map(c => c.split(';')[0]).join('; ');
+  } catch {
+    return '';
+  }
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -27,28 +40,44 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // ── Step 1: Resolve postcode → Rightmove locationIdentifier ────────────
+    // ── Step 1: Get session cookies from Rightmove homepage ─────────────────
+    const cookies = await getRightmoveCookies();
+
+    // ── Step 2: Resolve postcode → Rightmove locationIdentifier ────────────
     const taUrl = `https://www.rightmove.co.uk/typeAhead/uknoauth?input=${encodeURIComponent(postcode)}&numberOfResults=6`;
-    const taResp = await fetch(taUrl, { headers: BROWSER_HEADERS });
+    const taHeaders = {
+      ...BASE_HEADERS,
+      'Accept': 'application/json, text/plain, */*',
+      'Referer': 'https://www.rightmove.co.uk/',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'same-origin',
+      ...(cookies ? { 'Cookie': cookies } : {}),
+    };
+    const taResp = await fetch(taUrl, { headers: taHeaders });
     const taText = await taResp.text();
 
     let locationId, locationName;
     try {
       const ta = JSON.parse(taText);
       const loc = ta.typeAheadLocations?.[0];
-      if (!loc) return res.status(404).json({ error: `Postcode "${postcode}" not recognised by Rightmove` });
+      if (!loc) return res.status(404).json({ error: `Postcode "${postcode}" not found — try e.g. CV37 8FH` });
       locationId = loc.locationIdentifier;
       locationName = loc.shortDisplayName || postcode.toUpperCase();
     } catch {
-      return res.status(502).json({ error: 'Rightmove typeahead returned unexpected data' });
+      // Return debug info so we can see what Rightmove actually returned
+      return res.status(502).json({
+        error: 'Rightmove typeahead returned unexpected data',
+        debug: taText.substring(0, 200),
+      });
     }
 
-    // ── Step 2: Fetch listings — up to 2 pages (48 properties) ─────────────
+    // ── Step 3: Fetch listings — up to 2 pages (48 properties) ─────────────
     const rawProps = [];
     for (let index = 0; index <= 24; index += 24) {
       const url = buildSearchUrl(locationId, radius, minBeds, minPrice, maxPrice, index);
       try {
-        const html = await fetchHtml(url);
+        const html = await fetchHtml(url, cookies);
         const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
         if (!match) break;
         const nd = JSON.parse(match[1]);
@@ -64,7 +93,7 @@ module.exports = async function handler(req, res) {
       return res.json({ properties: [], total: 0, locationName });
     }
 
-    // ── Step 3: Bulk reverse-geocode all properties lat/lng → postcodes ─────
+    // ── Step 4: Bulk reverse-geocode all properties lat/lng → postcodes ─────
     const geoWithIndex = rawProps
       .map((p, i) => ({ i, lat: p.location?.latitude, lng: p.location?.longitude }))
       .filter(g => g.lat && g.lng);
@@ -90,7 +119,7 @@ module.exports = async function handler(req, res) {
       });
     } catch { /* IMD will fall back to 5 */ }
 
-    // ── Step 4: Fetch IMD decile for each postcode (parallel) ───────────────
+    // ── Step 5: Fetch IMD decile for each postcode (parallel) ───────────────
     // findthatpostcode.uk returns raw IMD rank (1=most deprived, 32844=least)
     // Convert to decile 1-10: Math.ceil(rank * 10 / 32844)
     const imdByIndex = {};
@@ -109,7 +138,7 @@ module.exports = async function handler(req, res) {
       })
     );
 
-    // ── Step 5: Assemble final property objects ──────────────────────────────
+    // ── Step 6: Assemble final property objects ──────────────────────────────
     const properties = rawProps.map((p, i) => {
       const featureArr = p.keyFeatures ?? [];
       const summary = p.summary ?? '';
@@ -166,8 +195,14 @@ function buildSearchUrl(locationId, radius, minBeds, minPrice, maxPrice, index) 
   return url;
 }
 
-async function fetchHtml(url) {
-  const r = await fetch(url, { headers: BROWSER_HEADERS });
+async function fetchHtml(url, cookies = '') {
+  const headers = {
+    ...BASE_HEADERS,
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Referer': 'https://www.rightmove.co.uk/',
+    ...(cookies ? { 'Cookie': cookies } : {}),
+  };
+  const r = await fetch(url, { headers });
   return r.text();
 }
 
