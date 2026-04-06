@@ -7,20 +7,6 @@ const BASE_HEADERS = {
   'Accept-Encoding': 'gzip, deflate, br',
 };
 
-// Grab Rightmove session cookies so the typeahead returns JSON instead of HTML
-async function getRightmoveCookies() {
-  try {
-    const resp = await fetch('https://www.rightmove.co.uk/', {
-      headers: { ...BASE_HEADERS, 'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8' },
-      redirect: 'follow',
-    });
-    const setCookies = resp.headers.getSetCookie ? resp.headers.getSetCookie() : [];
-    return setCookies.map(c => c.split(';')[0]).join('; ');
-  } catch {
-    return '';
-  }
-}
-
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -40,44 +26,29 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // ── Step 1: Get session cookies from Rightmove homepage ─────────────────
-    const cookies = await getRightmoveCookies();
-
-    // ── Step 2: Resolve postcode → Rightmove locationIdentifier ────────────
-    const taUrl = `https://www.rightmove.co.uk/typeAhead/uknoauth?input=${encodeURIComponent(postcode)}&numberOfResults=6`;
-    const taHeaders = {
-      ...BASE_HEADERS,
-      'Accept': 'application/json, text/plain, */*',
-      'Referer': 'https://www.rightmove.co.uk/',
-      'sec-fetch-dest': 'empty',
-      'sec-fetch-mode': 'cors',
-      'sec-fetch-site': 'same-origin',
-      ...(cookies ? { 'Cookie': cookies } : {}),
-    };
-    const taResp = await fetch(taUrl, { headers: taHeaders });
+    // ── Step 1: Resolve postcode → Rightmove locationIdentifier ────────────
+    // New endpoint (los.rightmove.co.uk) returns XML, no cookies needed
+    const taUrl = `https://los.rightmove.co.uk/typeahead?query=${encodeURIComponent(postcode)}&limit=6&exclude=STREET`;
+    const taResp = await fetch(taUrl, {
+      headers: { ...BASE_HEADERS, 'Accept': 'application/xml, text/xml, */*' },
+    });
     const taText = await taResp.text();
 
     let locationId, locationName;
-    try {
-      const ta = JSON.parse(taText);
-      const loc = ta.typeAheadLocations?.[0];
-      if (!loc) return res.status(404).json({ error: `Postcode "${postcode}" not found — try e.g. CV37 8FH` });
-      locationId = loc.locationIdentifier;
-      locationName = loc.shortDisplayName || postcode.toUpperCase();
-    } catch {
-      // Return debug info so we can see what Rightmove actually returned
-      return res.status(502).json({
-        error: 'Rightmove typeahead returned unexpected data',
-        debug: taText.substring(0, 200),
-      });
+    // Parse XML: <id>4201441</id><type>POSTCODE</type><displayName>CV37 8FH</displayName>
+    const idMatch = taText.match(/<id>(\d+)<\/id>[\s\S]*?<type>([A-Z_]+)<\/type>[\s\S]*?<displayName>(.*?)<\/displayName>/);
+    if (!idMatch) {
+      return res.status(404).json({ error: `Postcode "${postcode}" not found on Rightmove` });
     }
+    locationId = `${idMatch[2]}^${idMatch[1]}`;   // e.g. "POSTCODE^4201441"
+    locationName = idMatch[3];                      // e.g. "CV37 8FH"
 
-    // ── Step 3: Fetch listings — up to 2 pages (48 properties) ─────────────
+    // ── Step 2: Fetch listings — up to 2 pages (48 properties) ─────────────
     const rawProps = [];
     for (let index = 0; index <= 24; index += 24) {
       const url = buildSearchUrl(locationId, radius, minBeds, minPrice, maxPrice, index);
       try {
-        const html = await fetchHtml(url, cookies);
+        const html = await fetchHtml(url);
         const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
         if (!match) break;
         const nd = JSON.parse(match[1]);
@@ -195,14 +166,14 @@ function buildSearchUrl(locationId, radius, minBeds, minPrice, maxPrice, index) 
   return url;
 }
 
-async function fetchHtml(url, cookies = '') {
-  const headers = {
-    ...BASE_HEADERS,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Referer': 'https://www.rightmove.co.uk/',
-    ...(cookies ? { 'Cookie': cookies } : {}),
-  };
-  const r = await fetch(url, { headers });
+async function fetchHtml(url) {
+  const r = await fetch(url, {
+    headers: {
+      ...BASE_HEADERS,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Referer': 'https://www.rightmove.co.uk/',
+    },
+  });
   return r.text();
 }
 
