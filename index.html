@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Chesterfield Property Finder</title>
+<title>UK Property Finder</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -314,6 +314,34 @@
     .header-stats { display: none; }
     .logo-icon { width: 28px; height: 28px; font-size: 15px; }
   }
+.header-search { display:flex; align-items:center; gap:8px; flex:1; max-width:500px; margin:0 24px; }
+.header-search input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:7px 12px; font-size:12px; color:var(--text); min-width:0; }
+.header-search input:focus { outline:none; border-color:var(--accent); }
+.btn-go { background:var(--accent); color:white; border:none; border-radius:6px; padding:7px 14px; font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0; }
+.btn-go:hover { background:#3f51b5; }
+.btn-add-prop { background:#2e7d32; color:white; border:none; border-radius:6px; padding:7px 14px; font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0; }
+.btn-add-prop:hover { background:#1b5e20; }
+@media(max-width:767px) { .header-search { display:none; } }
+
+  /* MODAL */
+.modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px; }
+.modal-box { background:var(--surface);border:1px solid var(--border);border-radius:12px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.6); }
+.modal-hdr { padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:700;flex-shrink:0; }
+.modal-body { overflow-y:auto;padding:16px 20px;flex:1; }
+.modal-ftr { padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0; }
+.form-note { font-size:11px;color:var(--muted);background:var(--surface2);border-radius:6px;padding:8px 10px;margin-bottom:14px;line-height:1.5; }
+.form-row2 { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px; }
+.form-row3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px; }
+.fgrp { display:flex;flex-direction:column;gap:4px; }
+.fgrp-wide { grid-column:span 1; }
+.fgrp label { font-size:11px;color:var(--muted); }
+.fgrp input, .fgrp select { background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;color:var(--text);width:100%; }
+.fgrp input:focus, .fgrp select:focus { outline:none;border-color:var(--accent); }
+.form-checks { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px; }
+.fcheck { display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 10px; }
+.fcheck:hover { color:var(--text); }
+.fcheck input { accent-color:var(--accent);width:13px;height:13px; }
+@media(max-width:480px) { .form-row2,.form-row3 { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -322,11 +350,16 @@
   <div class="logo">
     <div class="logo-icon">🏠</div>
     <div>
-      <h1>Chesterfield Property Finder</h1>
-      <span>IMD Deprivation + Schools + Value Scoring</span>
+      <h1>UK Property Finder</h1>
+      <span>IMD · Schools · EPC · Parking · Value Score</span>
     </div>
   </div>
-  <div class="header-stats">
+  <div class="header-search">
+  <input type="text" id="postcode-input" placeholder="🔍  Search any UK postcode…" onkeydown="if(event.key==='Enter')goToPostcode()">
+  <button class="btn-go" onclick="goToPostcode()">Go</button>
+  <button class="btn-add-prop" onclick="openAddPropModal()">＋ Add Property</button>
+</div>
+  
     <div class="stat"><div class="stat-val" id="hdr-total">0</div><div class="stat-label">Properties</div></div>
     <div class="stat"><div class="stat-val" id="hdr-shown">0</div><div class="stat-label">Filtered</div></div>
     <div class="stat"><div class="stat-val" id="hdr-avg-score">–</div><div class="stat-label">Avg Score</div></div>
@@ -355,8 +388,8 @@
           <div class="filter-label">Price Range</div>
           <div class="price-display" id="price-display">£250,000 – £350,000</div>
           <div class="range-row">
-            <input type="range" id="price-min" min="250000" max="350000" step="5000" value="250000" oninput="updatePriceDisplay()">
-            <input type="range" id="price-max" min="250000" max="350000" step="5000" value="350000" oninput="updatePriceDisplay()">
+            <input type="range" id="price-min" min="0" max="2000000" step="5000" value="0" oninput="updatePriceDisplay()">
+            <input type="range" id="price-max" min="0" max="2000000" step="5000" value="2000000" oninput="updatePriceDisplay()">
           </div>
         </div>
         <div class="filter-row">
@@ -579,50 +612,45 @@ const SCHOOLS = [
 //  - School Quality (25 pts): best nearby school Ofsted + GCSE/KS2
 //  - Property Features (15 pts): type, no chain, extended/renovated
 function calcScore(p) {
-  // 1. IMD Score
-  const imdPts = [0,0,2,5,9,14,18,23,27,31,35];
+  // 1. IMD Score (40 pts max)
+  const imdPts = [0,0,2,6,10,16,21,26,31,35,40];
   const imdScore = imdPts[Math.min(10, Math.max(1, p.imd))];
 
-  // 2. Price Efficiency (budget £250k-£350k → 25-0 points, linear)
-  const priceScore = Math.round(25 * (1 - (p.price - 250000) / 100000));
-
-  // 3. School Quality
+  // 2. School Quality (35 pts max)
   let schoolScore = 0;
   const nearby = getNearbySchools(p.lat, p.lng, 2.0);
   const nearbyPrimary = nearby.filter(s => s.type === 'primary');
   const nearbySecondary = nearby.filter(s => s.type === 'secondary');
   const bestPrimary = nearbyPrimary.sort((a,b) => ofstedRank(b.ofsted)-ofstedRank(a.ofsted))[0];
   const bestSecondary = nearbySecondary.sort((a,b) => ofstedRank(b.ofsted)-ofstedRank(a.ofsted))[0];
-  const ofstedScores = {Outstanding:12, Good:9, 'Requires Improvement':5, Inadequate:2};
+  const ofstedScores = {Outstanding:15, Good:11, 'Requires Improvement':6, Inadequate:2};
   if (bestPrimary) schoolScore += ofstedScores[bestPrimary.ofsted] || 0;
   if (bestSecondary) schoolScore += ofstedScores[bestSecondary.ofsted] || 0;
-  // Bonus for KS2/Attainment8
+  // Bonus for KS2/Attainment8 (1 point each, max 35)
   if (bestPrimary && bestPrimary.ks2 >= 80) schoolScore += 1;
   if (bestSecondary && bestSecondary.attainment8 >= 55) schoolScore += 1;
-  schoolScore = Math.min(25, schoolScore);
+  schoolScore = Math.min(35, schoolScore);
 
-  // 4. Property Features (max 15)
-  // Parking tier: garage=3, driveway=1, on-road=0
-  // EPC: B=+2, C=+1 | Cul-de-sac: +1 | All capped at 15
+  // 3. Property Features (25 pts max)
   let featScore = 0;
-  if (p.ptype === 'Detached') featScore += 4;
-  else if (p.ptype === 'Semi-Detached') featScore += 2;
-  else featScore += 1;
-  if (p.nochain) featScore += 3;
-  if (p.extended || p.renovated) featScore += 2;
-  if (p.baths >= 2) featScore += 2;
-  if (p.parking === 'garage') featScore += 3;
-  else if (p.parking === 'driveway') featScore += 1;
+  if (p.ptype === 'Detached') featScore += 6;
+  else if (p.ptype === 'Semi-Detached') featScore += 3;
+  else featScore += 2;
+  if (p.nochain) featScore += 5;
+  if (p.extended || p.renovated) featScore += 3;
+  if (p.baths >= 2) featScore += 3;
+  if (p.parking === 'garage') featScore += 5;
+  else if (p.parking === 'driveway') featScore += 2;
   // on-road: +0
-  if (p.largeplot) featScore += 1;
-  if (p.epc === 'A' || p.epc === 'B') featScore += 2;
-  else if (p.epc === 'C') featScore += 1;
-  if (p.culdesac) featScore += 1;
-  featScore = Math.min(15, featScore);
+  if (p.largeplot) featScore += 2;
+  if (p.epc === 'A' || p.epc === 'B') featScore += 3;
+  else if (p.epc === 'C') featScore += 2;
+  if (p.culdesac) featScore += 2;
+  featScore = Math.min(25, featScore);
 
   return {
-    total: imdScore + priceScore + schoolScore + featScore,
-    imdScore, priceScore, schoolScore, featScore
+    total: imdScore + schoolScore + featScore,
+    imdScore, schoolScore, featScore
   };
 }
 
@@ -645,7 +673,7 @@ function getNearbySchools(lat, lng, radiusKm) {
 // ============================================================
 // PROPERTIES
 // ============================================================
-const PROPERTIES_RAW = [
+let PROPERTIES_RAW = [
   // ===== DECILE 9-10: WALTON, BRAMPTON, LOUNDSLEY GREEN =====
   // sqft: confirmed from Rightmove listing text; null = not published by agent
   // parking: 'garage'|'driveway'|'onroad' | ctax: A-F | epc: A-G | culdesac: bool
@@ -695,7 +723,7 @@ const PROPERTIES_RAW = [
 ];
 
 // Pre-calculate scores
-const PROPERTIES = PROPERTIES_RAW.map(p => {
+let PROPERTIES = PROPERTIES_RAW.map(p => {
   const s = calcScore(p);
   return {...p, score: s.total, scoreBreakdown: s};
 });
@@ -704,9 +732,58 @@ const PROPERTIES = PROPERTIES_RAW.map(p => {
 // TRAIN STATIONS
 // ============================================================
 const TRAIN_STATIONS = [
-  { name:"Chesterfield",  code:"CHD", lat:53.2348, lng:-1.4208, line:"Midland Main Line",   services:"London St Pancras · Sheffield · Derby · Nottingham" },
-  { name:"Dronfield",     code:"DRO", lat:53.3002, lng:-1.4680, line:"Midland Main Line",   services:"Sheffield · Chesterfield" },
-  { name:"Alfreton",      code:"ALF", lat:53.0979, lng:-1.3814, line:"Midland Main Line",   services:"Sheffield · Nottingham · London" },
+  // Chesterfield area (existing)
+  {name:"Chesterfield",code:"CHD",lat:53.2348,lng:-1.4208,line:"Midland Main Line",services:"London St Pancras · Sheffield · Derby"},
+  {name:"Dronfield",code:"DRO",lat:53.3002,lng:-1.4680,line:"Midland Main Line",services:"Sheffield · Chesterfield"},
+  {name:"Alfreton",code:"ALF",lat:53.0979,lng:-1.3814,line:"Midland Main Line",services:"Sheffield · Nottingham · London"},
+  {name:"Sheffield",code:"SHF",lat:53.3779,lng:-1.4624,line:"Midland Main Line",services:"London · Leeds · Manchester · Chesterfield"},
+  {name:"Derby",code:"DBY",lat:52.9163,lng:-1.4757,line:"Midland Main Line",services:"London · Sheffield · Nottingham"},
+  {name:"Nottingham",code:"NOT",lat:52.9474,lng:-1.1467,line:"Midland Mainline",services:"London · Sheffield · Derby"},
+  {name:"Leicester",code:"LEI",lat:52.6306,lng:-1.1273,line:"Midland Main Line",services:"London · Sheffield"},
+  {name:"Rotherham Central",code:"RMC",lat:53.4300,lng:-1.3600,line:"South Yorkshire",services:"Sheffield · Doncaster"},
+  {name:"Barnsley",code:"BNY",lat:53.5536,lng:-1.4790,line:"Transpennine",services:"Sheffield · Leeds"},
+  {name:"Doncaster",code:"DON",lat:53.5222,lng:-1.1367,line:"East Coast Main Line",services:"London · Leeds · Edinburgh"},
+  {name:"Wakefield Westgate",code:"WKF",lat:53.6832,lng:-1.4990,line:"East Coast Main Line",services:"London · Leeds"},
+  {name:"Leeds",code:"LDS",lat:53.7954,lng:-1.5491,line:"Multiple",services:"London · Manchester · Edinburgh"},
+  {name:"Bradford Forster Square",code:"BDQ",lat:53.7953,lng:-1.7520,line:"Bradford",services:"Leeds · Skipton"},
+  {name:"Huddersfield",code:"HUD",lat:53.6480,lng:-1.7860,line:"Transpennine",services:"Manchester · Leeds"},
+  {name:"York",code:"YRK",lat:53.9581,lng:-1.0930,line:"East Coast Main Line",services:"London · Edinburgh · Manchester"},
+  {name:"Hull",code:"HUL",lat:53.7435,lng:-0.3415,line:"TransPennine",services:"Leeds · Doncaster"},
+  {name:"Lincoln Central",code:"LCN",lat:53.2306,lng:-0.5398,line:"East Midlands",services:"Nottingham · Sheffield"},
+  {name:"Manchester Piccadilly",code:"MAN",lat:53.4774,lng:-2.2309,line:"Multiple",services:"London · Leeds · Birmingham"},
+  {name:"Manchester Victoria",code:"MCV",lat:53.4874,lng:-2.2437,line:"Northern",services:"Leeds · Blackpool"},
+  {name:"Stoke-on-Trent",code:"SOT",lat:53.0058,lng:-2.1774,line:"West Coast Main Line",services:"London · Manchester"},
+  {name:"Birmingham New Street",code:"BHM",lat:52.4778,lng:-1.9001,line:"Multiple",services:"London · Manchester · Bristol"},
+  {name:"Birmingham Moor Street",code:"BMO",lat:52.4793,lng:-1.8945,line:"Chiltern",services:"London Marylebone"},
+  {name:"Coventry",code:"COV",lat:52.4017,lng:-1.5130,line:"West Coast Main Line",services:"London · Birmingham"},
+  {name:"Wolverhampton",code:"WVH",lat:52.5879,lng:-2.1216,line:"West Coast Main Line",services:"London · Birmingham · Manchester"},
+  {name:"London Euston",code:"EUS",lat:51.5282,lng:-0.1337,line:"West Coast Main Line",services:"Birmingham · Manchester · Glasgow"},
+  {name:"London King's Cross",code:"KGX",lat:51.5309,lng:-0.1233,line:"East Coast Main Line",services:"Leeds · Edinburgh · Newcastle"},
+  {name:"London St Pancras",code:"STP",lat:51.5322,lng:-0.1241,line:"Midland Main Line / Eurostar",services:"Sheffield · Leicester · Paris"},
+  {name:"London Paddington",code:"PAD",lat:51.5154,lng:-0.1755,line:"Great Western",services:"Bristol · Cardiff · Reading"},
+  {name:"London Liverpool Street",code:"LST",lat:51.5178,lng:-0.0823,line:"Greater Anglia",services:"Norwich · Cambridge · Stansted"},
+  {name:"London Victoria",code:"VIC",lat:51.4952,lng:-0.1441,line:"Southern",services:"Brighton · Gatwick · Folkestone"},
+  {name:"London Waterloo",code:"WAT",lat:51.5031,lng:-0.1131,line:"South Western",services:"Southampton · Bournemouth · Portsmouth"},
+  {name:"London Bridge",code:"LBG",lat:51.5048,lng:-0.0864,line:"Thameslink/Southern",services:"Brighton · Bedford · Gatwick"},
+  {name:"London Cannon Street",code:"CST",lat:51.5113,lng:-0.0904,line:"Southeastern",services:"Sevenoaks · Maidstone"},
+  {name:"Reading",code:"RDG",lat:51.4590,lng:-0.9716,line:"Great Western",services:"London · Bristol · Cardiff"},
+  {name:"Oxford",code:"OXF",lat:51.7535,lng:-1.2703,line:"Great Western",services:"London · Birmingham"},
+  {name:"Cambridge",code:"CBG",lat:52.1941,lng:0.1370,line:"Greater Anglia",services:"London · Ely · Norwich"},
+  {name:"Norwich",code:"NRW",lat:52.6275,lng:1.3053,line:"Greater Anglia",services:"London · Cambridge"},
+  {name:"Bristol Temple Meads",code:"BRI",lat:51.4490,lng:-2.5814,line:"Great Western",services:"London · Cardiff · Birmingham"},
+  {name:"Cardiff Central",code:"CDF",lat:51.4762,lng:-3.1784,line:"Great Western",services:"London · Bristol · Swansea"},
+  {name:"Southampton Central",code:"SOU",lat:50.9088,lng:-1.4038,line:"South Western",services:"London · Bournemouth"},
+  {name:"Portsmouth Harbour",code:"PMH",lat:50.7990,lng:-1.0875,line:"South Western",services:"London · Southampton"},
+  {name:"Brighton",code:"BTN",lat:50.8295,lng:-0.1413,line:"Thameslink/Southern",services:"London Victoria/Bridge"},
+  {name:"Exeter St Davids",code:"EXD",lat:50.7259,lng:-3.5269,line:"Great Western",services:"London · Bristol · Plymouth"},
+  {name:"Plymouth",code:"PLY",lat:50.3780,lng:-4.1428,line:"Great Western",services:"London · Exeter"},
+  {name:"Newcastle",code:"NCL",lat:54.9681,lng:-1.6115,line:"East Coast Main Line",services:"London · Edinburgh · Leeds"},
+  {name:"Edinburgh Waverley",code:"EDB",lat:55.9521,lng:-3.1897,line:"East Coast Main Line",services:"London · Glasgow · Aberdeen"},
+  {name:"Glasgow Central",code:"GLC",lat:55.8580,lng:-4.2576,line:"West Coast Main Line",services:"London · Edinburgh"},
+  {name:"Aberdeen",code:"ABD",lat:57.1437,lng:-2.0981,line:"East Coast",services:"Edinburgh · Inverness"},
+  {name:"Swansea",code:"SWA",lat:51.6290,lng:-3.9429,line:"Great Western",services:"London · Cardiff"},
+  {name:"Cheltenham Spa",code:"CNM",lat:51.8994,lng:-2.0743,line:"Great Western",services:"London · Birmingham · Bristol"},
+  {name:"Gloucester",code:"GCR",lat:51.8659,lng:-2.2460,line:"Great Western",services:"London · Birmingham · Bristol"},
 ];
 
 function getNearestStation(lat, lng) {
@@ -927,9 +1004,22 @@ function renderMarkers(props) {
 // FILTERS
 // ============================================================
 function updatePriceDisplay() {
-  const min = +document.getElementById('price-min').value;
-  const max = +document.getElementById('price-max').value;
-  document.getElementById('price-display').textContent = `£${(min/1000).toFixed(0)}k – £${(max/1000).toFixed(0)}k`;
+  const min = parseInt(document.getElementById('price-min').value);
+  const max = parseInt(document.getElementById('price-max').value);
+  let label = '';
+  if (min === 0 && max === 2000000) {
+    label = 'Any price';
+  } else if (min === 0) {
+    label = 'Up to £' + (max >= 1000000 ? '£' + (max/1000000).toFixed(1) + 'M' : '£' + Math.round(max/1000) + 'k');
+  } else if (max === 2000000) {
+    label = '£' + (min >= 1000000 ? '£' + (min/1000000).toFixed(1) + 'M' : '£' + Math.round(min/1000) + 'k') + '+';
+  } else {
+    const minStr = min >= 1000000 ? '£' + (min/1000000).toFixed(1) + 'M' : '£' + Math.round(min/1000) + 'k';
+    const maxStr = max >= 1000000 ? '£' + (max/1000000).toFixed(1) + 'M' : '£' + Math.round(max/1000) + 'k';
+    label = minStr + ' – ' + maxStr;
+  }
+  document.querySelector('.price-display').textContent = label;
+}k – £${(max/1000).toFixed(0)}k`;
   applyFilters();
 }
 function updateIMDDisplay() {
@@ -1011,7 +1101,7 @@ function applyFilters() {
   const ctaxOrder = {A:0,B:1,C:2,D:3,E:4,F:5};
 
   let filtered = PROPERTIES.filter(p => {
-    if (p.price < minPrice || p.price > maxPrice) return false;
+    if (p.price < minPrice || (maxPrice < 2000000 && p.price > maxPrice)) return false;
     if (beds > 0 && p.beds !== beds) return false;
     if (minBaths > 0 && p.baths < minBaths) return false;
     if (p.imd < minIMD) return false;
@@ -1080,52 +1170,64 @@ function applyFilters() {
 }
 
 function updateFilterBadge() {
+  const priceMin = parseInt(document.getElementById('price-min').value) || 0;
+  const priceMax = parseInt(document.getElementById('price-max').value) || 2000000;
+  const beds = document.getElementById('filter-beds').value;
+  const baths = document.getElementById('filter-baths').value;
+  const parking = document.getElementById('filter-parking').value;
+  const ptype = document.getElementById('filter-ptype').value;
+  const ctax = document.getElementById('filter-ctax').value;
+  const epc = document.getElementById('filter-epc').value;
+  const imd = parseInt(document.getElementById('filter-imd').value) || 1;
+  const school = document.getElementById('filter-school').value;
+  const nochain = document.getElementById('filter-nochain').checked;
+  const culdesac = document.getElementById('filter-culdesac').checked;
+  const showAvoid = document.getElementById('show-avoid').checked;
+  const sizeOn = document.getElementById('size-filter-on').checked;
+
   let count = 0;
-  if (+document.getElementById('filter-beds').value > 0) count++;
-  if (+document.getElementById('filter-baths').value > 0) count++;
-  if (document.getElementById('filter-parking').value !== 'any') count++;
-  if (document.getElementById('filter-ptype').value !== 'any') count++;
-  if (document.getElementById('filter-ctax').value !== 'any') count++;
-  if (document.getElementById('filter-epc').value !== 'any') count++;
-  if (document.getElementById('filter-nochain').checked) count++;
-  if (document.getElementById('filter-culdesac').checked) count++;
-  if (+document.getElementById('filter-imd').value > 1) count++;
-  if (document.getElementById('filter-school').value !== 'any') count++;
-  if (document.getElementById('size-filter-on').checked) count++;
-  const el = document.getElementById('active-filter-count');
-  if (el) { el.textContent = count; el.style.display = count > 0 ? 'inline' : 'none'; }
+  if (priceMin > 0 || priceMax < 2000000) count++;
+  if (beds !== '0') count++;
+  if (baths !== '0') count++;
+  if (parking !== 'any') count++;
+  if (ptype !== 'any') count++;
+  if (ctax !== 'any') count++;
+  if (epc !== 'any') count++;
+  if (imd > 1) count++;
+  if (school !== 'any') count++;
+  if (nochain) count++;
+  if (culdesac) count++;
+  if (!showAvoid) count++;
+  if (sizeOn) count++;
+
+  const badge = document.querySelector('.filter-count-badge');
+  if (badge) {
+    if (count > 0) {
+      badge.textContent = count;
+      badge.style.display = 'inline-block';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
 }
 
 function resetFilters() {
-  document.getElementById('price-min').value = 250000;
-  document.getElementById('price-max').value = 350000;
-  document.getElementById('filter-beds').value = 0;
-  document.getElementById('filter-baths').value = 0;
+  document.getElementById('price-min').value = 0;
+  document.getElementById('price-max').value = 2000000;
+  document.getElementById('filter-beds').value = '0';
+  document.getElementById('filter-baths').value = '0';
   document.getElementById('filter-parking').value = 'any';
   document.getElementById('filter-ptype').value = 'any';
   document.getElementById('filter-ctax').value = 'any';
   document.getElementById('filter-epc').value = 'any';
-  document.getElementById('filter-nochain').checked = false;
-  document.getElementById('filter-culdesac').checked = false;
   document.getElementById('filter-imd').value = 1;
   document.getElementById('filter-school').value = 'any';
+  document.getElementById('filter-nochain').checked = false;
+  document.getElementById('filter-culdesac').checked = false;
   document.getElementById('show-avoid').checked = true;
-  document.getElementById('search-input').value = '';
-  document.getElementById('sort-by').value = 'score';
-  document.getElementById('show-schools').checked = true;
-  document.getElementById('show-zones').checked = true;
   document.getElementById('size-filter-on').checked = false;
-  document.getElementById('filter-size').min = 600; document.getElementById('filter-size').max = 1600; document.getElementById('filter-size').step = 50;
-  document.getElementById('filter-size').value = 600;
-  document.getElementById('size-include-unknown').checked = true;
-  document.getElementById('unit-toggle').textContent = 'sqft';
-  sizeUnit = 'sqft';
-  toggleSizeFilter();
-  updateSizeDisplay();
   updatePriceDisplay();
   updateIMDDisplay();
-  toggleSchools();
-  toggleZones();
   applyFilters();
 }
 
@@ -1239,23 +1341,19 @@ function selectProperty(id) {
           </div>
         </div>
         <div class="score-bar-row">
-          <div class="score-bar-label"><span>Location (IMD Decile)</span><strong>${p.scoreBreakdown.imdScore}/35</strong></div>
-          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.imdScore/35)*100}%;background:${imdColor}"></div></div>
+          <div class="score-bar-label"><span>Location (IMD Decile)</span><strong>${p.scoreBreakdown.imdScore}/40</strong></div>
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.imdScore/40)*100}%;background:${imdColor}"></div></div>
         </div>
         <div class="score-bar-row">
-          <div class="score-bar-label"><span>Price Efficiency</span><strong>${p.scoreBreakdown.priceScore}/25</strong></div>
-          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.priceScore/25)*100}%;background:#5c6bc0"></div></div>
+          <div class="score-bar-label"><span>School Quality</span><strong>${p.scoreBreakdown.schoolScore}/35</strong></div>
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.schoolScore/35)*100}%;background:#7c4dff"></div></div>
         </div>
         <div class="score-bar-row">
-          <div class="score-bar-label"><span>School Quality</span><strong>${p.scoreBreakdown.schoolScore}/25</strong></div>
-          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.schoolScore/25)*100}%;background:#7c4dff"></div></div>
-        </div>
-        <div class="score-bar-row">
-          <div class="score-bar-label"><span>Property Features</span><strong>${p.scoreBreakdown.featScore}/15</strong></div>
-          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.featScore/15)*100}%;background:#00bcd4"></div></div>
+          <div class="score-bar-label"><span>Property Features</span><strong>${p.scoreBreakdown.featScore}/25</strong></div>
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.featScore/25)*100}%;background:#00bcd4"></div></div>
         </div>
         <div style="margin-top:10px;font-size:10px;color:var(--muted);line-height:1.5;padding:8px;background:var(--surface2);border-radius:6px">
-          <strong style="color:var(--text)">Algorithm:</strong> IMD Decile (35%) + Price vs budget (25%) + Nearest school Ofsted/results (25%) + Property features (15%): type, parking tier, baths, no chain, plot
+          <strong style="color:var(--text)">Algorithm:</strong> IMD Decile (40 pts) + Nearest school Ofsted + attainment (35 pts) + Property features (25 pts): type, parking, baths, no chain, EPC, plot
         </div>
       </div>
       <!-- TRAIN STATIONS IN SCORE TAB -->
@@ -1335,6 +1433,7 @@ function selectProperty(id) {
 
     <div class="actions-section">
       <a class="action-btn" href="${p.url}" target="_blank"><span class="btn-icon">🏠</span>View on Rightmove</a>
+      ${p.custom ? `<button class="action-btn" style="background:#c62828;color:white" onclick="deleteProperty(${p.id})"><span class="btn-icon">🗑</span>Remove Property</button>` : ""}
       <button class="action-btn" onclick="map.setView([${p.lat},${p.lng}],16)"><span class="btn-icon">🗺</span>Centre on map</button>
     </div>
   `;
@@ -1433,8 +1532,155 @@ window.addEventListener('resize', () => {
 // ============================================================
 // INIT
 // ============================================================
+
+let nextPropId = 100; // custom property IDs start at 100
+let fpLat = null, fpLng = null;
+
+function openAddPropModal() {
+  document.getElementById('add-prop-modal').style.display = 'flex';
+  document.getElementById('fp-address').focus();
+}
+function closeAddPropModal() {
+  document.getElementById('add-prop-modal').style.display = 'none';
+  fpLat = null; fpLng = null;
+}
+
+async function lookupFpPostcode() {
+  const raw = document.getElementById('fp-postcode').value.trim();
+  const status = document.getElementById('fp-postcode-status');
+  if (raw.replace(/\s/g,'').length < 5) { status.textContent = ''; fpLat=null; fpLng=null; return; }
+  status.textContent = '⏳';
+  try {
+    const r = await fetch(`https://api.postcodes.io/postcodes/${raw.replace(/\s/g,'')}`);
+    const d = await r.json();
+    if (d.status === 200) {
+      fpLat = d.result.latitude;
+      fpLng = d.result.longitude;
+      status.textContent = '✅';
+      status.style.color = '#66bb6a';
+    } else { status.textContent = '❌'; status.style.color = '#ef5350'; fpLat=null; fpLng=null; }
+  } catch(e) { status.textContent = '⚠️'; fpLat=null; fpLng=null; }
+}
+
+function submitAddProp() {
+  const address = document.getElementById('fp-address').value.trim();
+  const postcode = document.getElementById('fp-postcode').value.trim().toUpperCase();
+  const price = +document.getElementById('fp-price').value;
+  const imd = +document.getElementById('fp-imd').value;
+  if (!address || !price || !imd || !postcode) {
+    showToast('❌ Please fill in Address, Postcode, Price and IMD Decile', true);
+    return;
+  }
+  if (!fpLat || !fpLng) {
+    showToast('❌ Invalid postcode — could not get location', true);
+    return;
+  }
+  const sqftVal = +document.getElementById('fp-sqft').value || null;
+  const newProp = {
+    id: nextPropId++,
+    address, area: postcode,
+    price, beds: +document.getElementById('fp-beds').value,
+    ptype: document.getElementById('fp-ptype').value,
+    baths: +document.getElementById('fp-baths').value,
+    parking: document.getElementById('fp-parking').value,
+    ctax: document.getElementById('fp-ctax').value,
+    epc: document.getElementById('fp-epc').value,
+    culdesac: document.getElementById('fp-culdesac').checked,
+    imd, nochain: document.getElementById('fp-nochain').checked,
+    renovated: document.getElementById('fp-renovated').checked,
+    extended: document.getElementById('fp-extended').checked,
+    largeplot: document.getElementById('fp-largeplot').checked,
+    sqft: sqftVal,
+    lat: fpLat, lng: fpLng,
+    agent: document.getElementById('fp-agent').value.trim() || 'Added manually',
+    status: imd >= 7 ? '✅ Recommended' : imd >= 5 ? '⚠️ Caution' : '❌ Avoid',
+    url: document.getElementById('fp-url').value.trim() || '#',
+    custom: true
+  };
+  const scored = { ...newProp, ...calcScore(newProp) };
+  scored.score = scored.total;
+  scored.scoreBreakdown = { imdScore: scored.imdScore, schoolScore: scored.schoolScore, featScore: scored.featScore };
+  PROPERTIES.push(scored);
+  saveCustomProperties();
+  closeAddPropModal();
+  applyFilters();
+  showToast(`✅ Added: ${address}`);
+  // reset form
+  ['fp-address','fp-postcode','fp-price','fp-sqft','fp-url','fp-agent'].forEach(id => document.getElementById(id).value = '');
+  ['fp-nochain','fp-culdesac','fp-largeplot','fp-renovated','fp-extended'].forEach(id => document.getElementById(id).checked = false);
+  document.getElementById('fp-imd').value = '';
+  document.getElementById('fp-postcode-status').textContent = '';
+}
+
+function saveCustomProperties() {
+  const custom = PROPERTIES.filter(p => p.custom);
+  try { localStorage.setItem('pf_custom_props', JSON.stringify(custom)); } catch(e) {}
+}
+
+function loadCustomProperties() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('pf_custom_props') || '[]');
+    saved.forEach(p => {
+      if (!PROPERTIES.find(x => x.id === p.id)) {
+        const scored = { ...p, ...calcScore(p) };
+        scored.score = scored.total;
+        scored.scoreBreakdown = { imdScore: scored.imdScore, schoolScore: scored.schoolScore, featScore: scored.featScore };
+        PROPERTIES.push(scored);
+        if (p.id >= nextPropId) nextPropId = p.id + 1;
+      }
+    });
+  } catch(e) {}
+}
+
+async function goToPostcode() {
+  const raw = document.getElementById('postcode-input').value.trim();
+  if (!raw) return;
+  const pc = raw.replace(/\s+/g,'').toUpperCase();
+  const btn = document.querySelector('.btn-go');
+  btn.textContent = '…'; btn.disabled = true;
+  try {
+    const r = await fetch(`https://api.postcodes.io/postcodes/${pc}`);
+    const d = await r.json();
+    if (d.status !== 200) throw new Error('Not found');
+    const {latitude, longitude, admin_district} = d.result;
+    map.flyTo([latitude, longitude], 13);
+    // Show toast
+    showToast(`📍 Navigated to ${raw.toUpperCase()}${admin_district ? ' · ' + admin_district : ''}`);
+  } catch(e) {
+    showToast('❌ Postcode not found — try e.g. S40 3QL, SW1A 1AA', true);
+  } finally {
+    btn.textContent = 'Go'; btn.disabled = false;
+  }
+}
+
+function showToast(msg, isError=false) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:${isError?'#c62828':'#1b5e20'};color:white;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.4);transition:opacity 0.3s;pointer-events:none`;
+  t.style.opacity = '1';
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+}
+
+function deleteProperty(id) {
+  if (!confirm('Remove this property from the list?')) return;
+  PROPERTIES = PROPERTIES.filter(p => p.id !== id);
+  saveCustomProperties();
+  closeDetail();
+  applyFilters();
+  showToast('🗑 Property removed');
+}
+
+
+
 window.onload = () => {
   initMap();
+  loadCustomProperties();
   updateIMDDisplay();
   updateSizeDisplay();
   // Mobile: start with map showing, sidebar hidden
@@ -1443,5 +1689,119 @@ window.onload = () => {
   }
 };
 </script>
+<!-- ADD PROPERTY MODAL -->
+<div id="add-prop-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddPropModal()">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <span>➕ Add Property</span>
+      <button onclick="closeAddPropModal()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body-scroll">
+      <div class="form-note">Find a property on Rightmove, then fill in the details below. <a href="https://checkpostcode.uk" target="_blank" style="color:var(--accent)">Check IMD at checkpostcode.uk ↗</a></div>
+      <div class="form-row2">
+        <div class="fgrp fgrp-wide">
+          <label>Address *</label>
+          <input type="text" id="fp-address" placeholder="12 Oak Street, Anytown">
+        </div>
+        <div class="fgrp">
+          <label>Postcode * <span id="fp-postcode-status"></span></label>
+          <input type="text" id="fp-postcode" placeholder="S40 1AA" oninput="lookupFpPostcode()">
+        </div>
+      </div>
+      <div class="form-row2">
+        <div class="fgrp">
+          <label>Price (£) *</label>
+          <input type="number" id="fp-price" placeholder="300000" min="0" step="1000">
+        </div>
+        <div class="fgrp">
+          <label>IMD Decile *</label>
+          <select id="fp-imd">
+            <option value="">-- select --</option>
+            <option value="10">10 (Least deprived)</option>
+            <option value="9">9</option><option value="8">8</option>
+            <option value="7">7</option><option value="6">6</option>
+            <option value="5">5</option><option value="4">4</option>
+            <option value="3">3</option><option value="2">2</option>
+            <option value="1">1 (Most deprived)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row3">
+        <div class="fgrp">
+          <label>Beds</label>
+          <select id="fp-beds">
+            <option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>
+          </select>
+        </div>
+        <div class="fgrp">
+          <label>Baths</label>
+          <select id="fp-baths">
+            <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+          </select>
+        </div>
+        <div class="fgrp">
+          <label>Type</label>
+          <select id="fp-ptype">
+            <option value="Detached" selected>Detached</option>
+            <option value="Semi-Detached">Semi-Detached</option>
+            <option value="Terraced">Terraced</option>
+            <option value="Flat">Flat</option>
+            <option value="Bungalow">Bungalow</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row3">
+        <div class="fgrp">
+          <label>Parking</label>
+          <select id="fp-parking">
+            <option value="garage">🚗 Garage</option>
+            <option value="driveway" selected>🅿️ Driveway</option>
+            <option value="onroad">🛣️ On-road</option>
+          </select>
+        </div>
+        <div class="fgrp">
+          <label>EPC</label>
+          <select id="fp-epc">
+            <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+            <option value="D" selected>D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option>
+          </select>
+        </div>
+        <div class="fgrp">
+          <label>Council Tax</label>
+          <select id="fp-ctax">
+            <option value="A">A</option><option value="B">B</option><option value="C">C</option>
+            <option value="D" selected>D</option><option value="E">E</option><option value="F">F</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row2">
+        <div class="fgrp">
+          <label>Floor Area (sqft, optional)</label>
+          <input type="number" id="fp-sqft" placeholder="950" min="0">
+        </div>
+        <div class="fgrp">
+          <label>Rightmove URL (optional)</label>
+          <input type="text" id="fp-url" placeholder="https://rightmove.co.uk/…">
+        </div>
+      </div>
+      <div class="fgrp" style="margin-bottom:10px">
+        <label>Agent / Notes (optional)</label>
+        <input type="text" id="fp-agent" placeholder="Agent name or notes">
+      </div>
+      <div class="form-checks">
+        <label class="fcheck"><input type="checkbox" id="fp-nochain"> ✓ No chain</label>
+        <label class="fcheck"><input type="checkbox" id="fp-culdesac"> 🔇 Cul-de-sac</label>
+        <label class="fcheck"><input type="checkbox" id="fp-largeplot"> 🌳 Large plot</label>
+        <label class="fcheck"><input type="checkbox" id="fp-renovated"> 🔨 Renovated</label>
+        <label class="fcheck"><input type="checkbox" id="fp-extended"> ↔ Extended</label>
+      </div>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn btn-secondary" onclick="closeAddPropModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAddProp()">Add to Map →</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
