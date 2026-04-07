@@ -1664,10 +1664,15 @@ async function searchProperties(postcode) {
   const listEl = document.getElementById('prop-list');
   listEl.innerHTML = '<div class="no-results"><div class="icon">⏳</div><div>Searching Rightmove…<br><small style="color:var(--muted)">Fetching live listings + IMD data</small></div></div>';
 
+  // Reset price filter on every new search so results from different areas aren't hidden
+  document.getElementById('price-min').value = 0;
+  document.getElementById('price-max').value = 2000000;
+  updatePriceDisplay();
+
   const radius = document.getElementById('search-radius')?.value || '1.0';
   const minBeds = document.getElementById('filter-beds').value;
-  const minPrice = document.getElementById('price-min').value;
-  const maxPrice = document.getElementById('price-max').value;
+  const minPrice = 0;
+  const maxPrice = 2000000;
 
   try {
     const params = new URLSearchParams({ postcode, radius, minBeds, minPrice, maxPrice });
