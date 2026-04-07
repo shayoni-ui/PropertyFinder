@@ -403,8 +403,10 @@
             <div class="filter-label">Bedrooms</div>
             <select id="filter-beds" onchange="applyFilters()">
               <option value="0">Any</option>
-              <option value="3">3 bed</option>
-              <option value="4">4 bed</option>
+              <option value="2">2+ bed</option>
+              <option value="3">3+ bed</option>
+              <option value="4">4+ bed</option>
+              <option value="5">5+ bed</option>
             </select>
           </div>
           <div class="filter-group">
@@ -1105,7 +1107,7 @@ function applyFilters() {
 
   let filtered = PROPERTIES.filter(p => {
     if (p.price < minPrice || (maxPrice < 2000000 && p.price > maxPrice)) return false;
-    if (beds > 0 && p.beds !== beds) return false;
+    if (beds > 0 && p.beds < beds) return false;
     if (minBaths > 0 && p.baths < minBaths) return false;
     if (p.imd < minIMD) return false;
     if (!showAvoid && p.status.includes('❌')) return false;

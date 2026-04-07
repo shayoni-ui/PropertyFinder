@@ -116,7 +116,7 @@ module.exports = async function handler(req, res) {
       const fl = [...featureArr, summary].join(' ').toLowerCase();
 
       return {
-        id: p.id,
+        id: +(p.id ?? p.propertyId ?? (i + 100000)),
         address: p.displayAddress,
         area: p.displayAddress.split(',').slice(-2).join(',').trim(),
         price: p.price?.amount ?? 0,
