@@ -617,22 +617,8 @@
 // DATA
 // ============================================================
 
-const SCHOOLS = [
-  // SECONDARY
-  { name:"St Mary's Catholic High", type:"secondary", phase:"Secondary", ofsted:"Outstanding", attainment8:59.3, progress8:0.52, lat:53.2520, lng:-1.4100, postcode:"S41 8SA", note:"#1 in Chesterfield. O/S across all areas." },
-  { name:"Brookfield Community School", type:"secondary", phase:"Secondary", ofsted:"Good", attainment8:46.2, progress8:0.18, lat:53.2325, lng:-1.4405, postcode:"S40 3NS", note:"Strong school serving Walton & Brampton" },
-  { name:"Outwood Academy Newbold", type:"secondary", phase:"Secondary", ofsted:"Good", attainment8:44.1, progress8:0.12, lat:53.2528, lng:-1.4085, postcode:"S41 8BB", note:"Popular academy in Newbold" },
-  { name:"Outwood Academy Hasland Hall", type:"secondary", phase:"Secondary", ofsted:"Good", attainment8:42.5, progress8:0.05, lat:53.2168, lng:-1.4035, postcode:"S41 0HR", note:"Serves Hasland & south Chesterfield" },
-  { name:"Whittington Green School", type:"secondary", phase:"Secondary", ofsted:"Requires Improvement", attainment8:38.2, progress8:-0.28, lat:53.2718, lng:-1.4032, postcode:"S41 9LU", note:"Old Whittington area" },
-  // PRIMARY
-  { name:"Newbold CE Primary", type:"primary", phase:"Primary", ofsted:"Outstanding", ks2:83, lat:53.2515, lng:-1.4108, postcode:"S41 8AG", note:"Outstanding in all areas. In St Mary's feeder." },
-  { name:"Whitecotes Primary School", type:"primary", phase:"Primary", ofsted:"Good", ks2:74, lat:53.2192, lng:-1.4268, postcode:"S40 3HH", note:"Walton. Well-regarded community school." },
-  { name:"Brampton Ellis CE Infant", type:"primary", phase:"Primary", ofsted:"Good", ks2:76, lat:53.2352, lng:-1.4415, postcode:"S40 3AX", note:"Brampton. Feeds into Brookfield." },
-  { name:"Loundsley Green Primary", type:"primary", phase:"Primary", ofsted:"Good", ks2:71, lat:53.2248, lng:-1.4458, postcode:"S40 4LG", note:"Loundsley Green. Good recent results." },
-  { name:"Hasland Junior School", type:"primary", phase:"Primary", ofsted:"Good", ks2:68, lat:53.2172, lng:-1.4038, postcode:"S41 0HR", note:"Hasland. Good with supportive community." },
-  { name:"Hady Primary School", type:"primary", phase:"Primary", ofsted:"Good", ks2:70, lat:53.2360, lng:-1.4098, postcode:"S41 0EQ", note:"Near Hady. Good school, mixed catchment." },
-  { name:"Abercrombie Primary", type:"primary", phase:"Primary", ofsted:"Good", ks2:72, lat:53.2498, lng:-1.4128, postcode:"S41 7QE", note:"Newbold S41 7 area. Feeds St Mary's." },
-];
+// UK-wide schools loaded from /schools_uk.json (19,970 schools, Ofsted Aug 2024)
+let SCHOOLS = [];
 
 // ============================================================
 // SCORING ALGORITHM
@@ -696,7 +682,12 @@ function haversine(lat1, lng1, lat2, lng2) {
 }
 
 function getNearbySchools(lat, lng, radiusKm) {
-  return SCHOOLS.map(s => ({...s, dist: haversine(lat, lng, s.lat, s.lng)}))
+  // Bounding-box pre-filter before expensive haversine (handles 20k schools efficiently)
+  const dLat = radiusKm / 111 + 0.01;
+  const dLng = radiusKm / (111 * Math.cos(lat * Math.PI / 180)) + 0.01;
+  return SCHOOLS
+    .filter(s => Math.abs(s.lat - lat) < dLat && Math.abs(s.lng - lng) < dLng)
+    .map(s => ({...s, dist: haversine(lat, lng, s.lat, s.lng)}))
     .filter(s => s.dist <= radiusKm)
     .sort((a,b) => a.dist - b.dist);
 }
@@ -866,9 +857,28 @@ function initMap() {
   });
   osmLayer.addTo(map);
   renderZones();
-  renderSchools();
   renderStations();
   applyFilters();
+
+  // Re-render schools when map moves/zooms
+  map.on('moveend zoomend', renderSchools);
+
+  // Load UK-wide schools data
+  fetch('/schools_uk.json')
+    .then(r => r.json())
+    .then(data => {
+      SCHOOLS = data.map(([n, t, la, lo, o]) => ({
+        name: n,
+        type: t === 'p' ? 'primary' : 'secondary',
+        phase: t === 'p' ? 'Primary' : 'Secondary',
+        ofsted: o,
+        lat: la,
+        lng: lo,
+      }));
+      document.getElementById('hdr-schools').textContent = SCHOOLS.length.toLocaleString();
+      renderSchools();
+    })
+    .catch(() => console.warn('Schools data unavailable'));
 }
 
 function setMapLayer(type, btn) {
@@ -912,7 +922,18 @@ function ofstedEmoji(r) {
 function renderSchools() {
   schoolMarkers.forEach(m => map.removeLayer(m));
   schoolMarkers = [];
-  SCHOOLS.forEach(s => {
+  if (!document.getElementById('show-schools').checked) return;
+  if (!SCHOOLS.length) return;
+  if (map.getZoom() < 12) return; // don't render 20k dots when zoomed out
+
+  const b = map.getBounds();
+  const pad = 0.05;
+  const visible = SCHOOLS.filter(s =>
+    s.lat > b.getSouth() - pad && s.lat < b.getNorth() + pad &&
+    s.lng > b.getWest() - pad && s.lng < b.getEast() + pad
+  ).slice(0, 150); // cap at 150 markers for performance
+
+  visible.forEach(s => {
     const size = s.type === 'secondary' ? 20 : 16;
     const icon = L.divIcon({
       className: '',
@@ -920,15 +941,10 @@ function renderSchools() {
       iconSize: [size, size], iconAnchor: [size/2, size/2]
     });
     const m = L.marker([s.lat, s.lng], {icon}).addTo(map);
-    const perfLine = s.type === 'secondary'
-      ? `<div class="popup-row">Attainment 8 <span>${s.attainment8}</span></div><div class="popup-row">Progress 8 <span>${s.progress8>=0?'+':''}${s.progress8}</span></div>`
-      : `<div class="popup-row">KS2 Expected % <span>${s.ks2}%</span></div>`;
     m.bindPopup(`
-      <div class="school-popup-title">🏫 ${s.name}</div>
-      <div class="school-popup-sub">${s.phase} • ${s.postcode}</div>
+      <div class="school-popup-title">${s.type==='secondary'?'🎓':'🏫'} ${s.name}</div>
+      <div class="school-popup-sub">${s.phase}</div>
       <div class="popup-row">Ofsted <span><span class="ofsted-badge ofsted-${s.ofsted.replace(/ /g,'-').toLowerCase()}">${s.ofsted}</span></span></div>
-      ${perfLine}
-      <div class="school-popup-sub" style="margin-top:5px;font-style:italic">${s.note}</div>
     `, {maxWidth:220});
     schoolMarkers.push(m);
   });
@@ -1424,10 +1440,8 @@ function selectProperty(id) {
                 <span>${s.phase}</span>
                 <span>${s.dist.toFixed(1)}km</span>
               </div>
-              <div class="school-meta" style="margin-top:3px">
-                ${s.type==='secondary'?`Att8: ${s.attainment8} | P8: ${s.progress8>=0?'+':''}${s.progress8}`:`KS2: ${s.ks2}%`}
-              </div>
-              <div style="font-size:10px;color:var(--muted);margin-top:2px;font-style:italic">${s.note}</div>
+              ${(s.attainment8||s.ks2) ? `<div class="school-meta" style="margin-top:3px">${s.type==='secondary'?`Att8: ${s.attainment8} | P8: ${s.progress8>=0?'+':''}${s.progress8}`:`KS2: ${s.ks2}%`}</div>` : ''}
+              ${s.note ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;font-style:italic">${s.note}</div>` : ''}
             </div>
           </div>
         `).join('') : '<div style="color:var(--muted);font-size:12px;padding:10px 0">No schools data within 2.5km</div>'}
