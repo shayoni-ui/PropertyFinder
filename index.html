@@ -355,7 +355,7 @@
     </div>
   </div>
   <div class="header-search">
-  <input type="text" id="postcode-input" value="S40 3QL" placeholder="🔍  Enter postcode…" onkeydown="if(event.key==='Enter')goToPostcode()">
+  <input type="text" id="postcode-input" value="S40 3QL" placeholder="🔍  Enter postcode…" onkeydown="if(event.key==='Enter')goToPostcode()" oninput="var s=document.getElementById('sidebar-postcode-input');if(s)s.value=this.value">
   <select id="search-radius" title="Search radius" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-size:12px;cursor:pointer;height:32px">
     <option value="0.5">0.5 mi</option>
     <option value="1.0" selected>1 mi</option>
@@ -377,6 +377,28 @@
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
     <div class="sheet-handle" onclick="closeMobileSheets()"></div>
+
+    <!-- Postcode Search (always visible, top of sidebar) -->
+    <div style="padding:10px 12px 8px;border-bottom:1px solid var(--border);background:var(--surface)">
+      <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📍 Search Area</div>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="sidebar-postcode-input" placeholder="Enter postcode e.g. CV37 8FH"
+          style="flex:1;background:var(--surface2);border:1.5px solid var(--accent);border-radius:7px;padding:8px 10px;font-size:13px;color:var(--text);min-width:0;outline:none"
+          onkeydown="if(event.key==='Enter')doSidebarSearch()"
+          oninput="document.getElementById('postcode-input').value=this.value">
+        <select id="sidebar-radius"
+          style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 6px;font-size:12px;cursor:pointer">
+          <option value="0.5">0.5 mi</option>
+          <option value="1.0" selected>1 mi</option>
+          <option value="3.0">3 mi</option>
+          <option value="5.0">5 mi</option>
+        </select>
+        <button onclick="doSidebarSearch()"
+          style="background:var(--accent);color:white;border:none;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">
+          Search
+        </button>
+      </div>
+    </div>
 
     <!-- Always-visible toggle bar -->
     <div class="filter-toggle-bar" onclick="toggleFilters()">
@@ -1638,6 +1660,19 @@ function loadCustomProperties() {
       }
     });
   } catch(e) {}
+}
+
+function doSidebarSearch() {
+  // Sync sidebar input → header input and radius → header radius
+  const val = document.getElementById('sidebar-postcode-input').value.trim();
+  const rad = document.getElementById('sidebar-radius').value;
+  if (!val) return;
+  document.getElementById('postcode-input').value = val;
+  const headerRadius = document.getElementById('search-radius');
+  if (headerRadius) headerRadius.value = rad;
+  // Also sync the header radius select to match sidebar
+  document.getElementById('search-radius').value = rad;
+  goToPostcode();
 }
 
 async function goToPostcode() {
