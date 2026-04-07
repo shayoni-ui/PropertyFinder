@@ -754,12 +754,25 @@ let PROPERTIES = PROPERTIES_RAW.map(p => {
 // TRAIN STATIONS
 // ============================================================
 const TRAIN_STATIONS = [
-  // Chesterfield area (existing)
+  // Midlands / North
   {name:"Chesterfield",code:"CHD",lat:53.2348,lng:-1.4208,line:"Midland Main Line",services:"London St Pancras · Sheffield · Derby"},
   {name:"Dronfield",code:"DRO",lat:53.3002,lng:-1.4680,line:"Midland Main Line",services:"Sheffield · Chesterfield"},
   {name:"Alfreton",code:"ALF",lat:53.0979,lng:-1.3814,line:"Midland Main Line",services:"Sheffield · Nottingham · London"},
-  {name:"Sheffield",code:"SHF",lat:53.3779,lng:-1.4624,line:"Midland Main Line",services:"London · Leeds · Manchester · Chesterfield"},
+  {name:"Sheffield",code:"SHF",lat:53.3779,lng:-1.4624,line:"Midland Main Line",services:"London · Leeds · Manchester"},
   {name:"Derby",code:"DBY",lat:52.9163,lng:-1.4757,line:"Midland Main Line",services:"London · Sheffield · Nottingham"},
+  // London local
+  {name:"Ealing Broadway",code:"EAL",lat:51.5148,lng:-0.3014,line:"Elizabeth / GWR",services:"Paddington · Reading · Shenfield"},
+  {name:"Acton Main Line",code:"AML",lat:51.5167,lng:-0.2675,line:"Elizabeth line",services:"Paddington · Liverpool Street"},
+  {name:"Southall",code:"STL",lat:51.5041,lng:-0.3783,line:"Elizabeth / GWR",services:"Paddington · Reading"},
+  {name:"Hammersmith",code:"HMM",lat:51.4925,lng:-0.2234,line:"District/Piccadilly",services:"Central London · Heathrow"},
+  {name:"Clapham Junction",code:"CLJ",lat:51.4641,lng:-0.1699,line:"South Western",services:"London Waterloo · Gatwick"},
+  {name:"Stratford",code:"SRA",lat:51.5418,lng:-0.0042,line:"Elizabeth / TfL",services:"Liverpool Street · Shenfield"},
+  {name:"Wimbledon",code:"WIM",lat:51.4213,lng:-0.2063,line:"South Western / District",services:"London Waterloo"},
+  {name:"Croydon (East)",code:"ECR",lat:51.3762,lng:-0.0930,line:"Thameslink",services:"London Bridge · Gatwick"},
+  // Birmingham local
+  {name:"Birmingham International",code:"BHI",lat:52.4509,lng:-1.7268,line:"West Coast Main Line",services:"London · Birmingham New Street"},
+  {name:"Solihull",code:"SOL",lat:52.4134,lng:-1.7778,line:"Chiltern / Cross-City",services:"Birmingham · London"},
+  {name:"Wolverhampton",code:"WVH",lat:52.5879,lng:-2.1216,line:"West Coast Main Line",services:"London · Birmingham · Manchester"},
   {name:"Nottingham",code:"NOT",lat:52.9474,lng:-1.1467,line:"Midland Mainline",services:"London · Sheffield · Derby"},
   {name:"Leicester",code:"LEI",lat:52.6306,lng:-1.1273,line:"Midland Main Line",services:"London · Sheffield"},
   {name:"Rotherham Central",code:"RMC",lat:53.4300,lng:-1.3600,line:"South Yorkshire",services:"Sheffield · Doncaster"},
@@ -778,7 +791,6 @@ const TRAIN_STATIONS = [
   {name:"Birmingham New Street",code:"BHM",lat:52.4778,lng:-1.9001,line:"Multiple",services:"London · Manchester · Bristol"},
   {name:"Birmingham Moor Street",code:"BMO",lat:52.4793,lng:-1.8945,line:"Chiltern",services:"London Marylebone"},
   {name:"Coventry",code:"COV",lat:52.4017,lng:-1.5130,line:"West Coast Main Line",services:"London · Birmingham"},
-  {name:"Wolverhampton",code:"WVH",lat:52.5879,lng:-2.1216,line:"West Coast Main Line",services:"London · Birmingham · Manchester"},
   {name:"London Euston",code:"EUS",lat:51.5282,lng:-0.1337,line:"West Coast Main Line",services:"Birmingham · Manchester · Glasgow"},
   {name:"London King's Cross",code:"KGX",lat:51.5309,lng:-0.1233,line:"East Coast Main Line",services:"Leeds · Edinburgh · Newcastle"},
   {name:"London St Pancras",code:"STP",lat:51.5322,lng:-0.1241,line:"Midland Main Line / Eurostar",services:"Sheffield · Leicester · Paris"},
@@ -821,22 +833,9 @@ function walkMins(km) {
 }
 
 // ============================================================
-// DEPRIVATION ZONES (approximate circles per area)
+// DEPRIVATION ZONES — built dynamically from live search results
 // ============================================================
-const ZONES = [
-  { name:"Walton", lat:53.2195, lng:-1.4300, radius:900, decile:9, color:"#2da84d" },
-  { name:"Brampton", lat:53.2360, lng:-1.4440, radius:850, decile:9, color:"#2da84d" },
-  { name:"Loundsley Green", lat:53.2255, lng:-1.4468, radius:700, decile:10, color:"#1a7a2e" },
-  { name:"Ashgate", lat:53.2430, lng:-1.4460, radius:650, decile:9, color:"#2da84d" },
-  { name:"Brockwell", lat:53.2448, lng:-1.4355, radius:750, decile:8, color:"#6abf69" },
-  { name:"Newbold S41 7", lat:53.2512, lng:-1.4110, radius:700, decile:8, color:"#6abf69" },
-  { name:"Hasland", lat:53.2170, lng:-1.4038, radius:750, decile:6, color:"#ffcc02" },
-  { name:"Hady", lat:53.2340, lng:-1.4090, radius:600, decile:5, color:"#ff9800" },
-  { name:"Old Whittington", lat:53.2688, lng:-1.4022, radius:800, decile:4, color:"#ef6c00" },
-  { name:"Newbold S41 8", lat:53.2580, lng:-1.4015, radius:600, decile:3, color:"#e53935" },
-  { name:"Dunston/Comley", lat:53.2390, lng:-1.3870, radius:700, decile:2, color:"#b71c1c" },
-  { name:"Town Centre", lat:53.2347, lng:-1.4201, radius:650, decile:4, color:"#ef6c00" },
-];
+let ZONES = []; // populated after each search from property IMD data
 
 // ============================================================
 // MAP INIT
@@ -845,7 +844,7 @@ let map, markers = [], schoolMarkers = [], zoneCircles = [], stationMarkers = []
 let osmLayer, satelliteLayer;
 
 function initMap() {
-  map = L.map('map', { zoomControl: true, tap: true }).setView([53.2300, -1.4250], 13);
+  map = L.map('map', { zoomControl: true, tap: true }).setView([52.5, -1.5], 6);
   // CartoDB Voyager — free, no API key, no referrer restrictions, works on file:// and GitHub Pages
   osmLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
@@ -889,15 +888,30 @@ function setMapLayer(type, btn) {
 }
 
 // ============================================================
-// DEPRIVATION ZONES
+// DEPRIVATION ZONES — built from live property IMD data
 // ============================================================
+function buildZonesFromProperties(props) {
+  // Group properties by IMD decile to create area circles
+  ZONES = props
+    .filter(p => p.lat && p.lng)
+    .map(p => ({
+      name: p.area || p.address.split(',').slice(-2).join(',').trim(),
+      lat: p.lat, lng: p.lng,
+      radius: 400,
+      decile: p.imd,
+      color: getIMDColor(p.imd),
+    }));
+  renderZones();
+}
+
 function renderZones() {
   zoneCircles.forEach(c => map.removeLayer(c));
   zoneCircles = [];
+  if (!document.getElementById('show-zones').checked) return;
   ZONES.forEach(z => {
     const circle = L.circle([z.lat, z.lng], {
       radius: z.radius, color: z.color, weight: 1,
-      fillColor: z.color, fillOpacity: 0.12
+      fillColor: z.color, fillOpacity: 0.10
     }).addTo(map);
     circle.bindTooltip(`<strong>${z.name}</strong><br>IMD Decile ${z.decile}`, {sticky:true});
     zoneCircles.push(circle);
@@ -1470,7 +1484,7 @@ function selectProperty(id) {
         <div style="margin-top:12px;font-size:11px;color:var(--muted);line-height:1.6">
           <div>📍 Area: <strong style="color:var(--text)">${p.area}</strong></div>
           <div>📊 IMD Decile: <strong style="color:${imdColor}">${p.imd}/10</strong> (${p.imd>=8?'Top 20%':p.imd>=6?'Top 40%':p.imd>=4?'Bottom 50%':'Bottom 30%'} least deprived in England)</div>
-          <div>🏘️ Census rank: ${p.imd>=9?'Brookside & Walton – #1 least deprived in Chesterfield':p.imd>=8?'Ashgate & Brockwell – top 3 least deprived':p.imd>=6?'Spital & Hasland – mid-range':p.imd>=4?'More deprived neighbourhood':'One of the most deprived areas'}</div>
+          <div>🏘️ National context: ${p.imd>=9?'Top 10% least deprived areas in England':p.imd>=7?'Top 30% least deprived – good residential area':p.imd>=5?'Around the national median':p.imd>=3?'More deprived than average':'Among the most deprived areas in England'}</div>
         </div>
       </div>
     </div>
@@ -1748,6 +1762,7 @@ async function searchProperties(postcode) {
     const custom = PROPERTIES.filter(p => p.custom);
     PROPERTIES = [...fetched, ...custom];
 
+    buildZonesFromProperties(fetched);
     showToast(`✅ ${data.properties.length} properties found near ${data.locationName || postcode}`);
     applyFilters();
   } catch (err) {
