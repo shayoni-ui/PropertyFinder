@@ -27,21 +27,40 @@ module.exports = async function handler(req, res) {
 
   try {
     // ── Step 1: Resolve postcode → Rightmove locationIdentifier ────────────
-    // New endpoint (los.rightmove.co.uk) returns XML, no cookies needed
     const taUrl = `https://los.rightmove.co.uk/typeahead?query=${encodeURIComponent(postcode)}&limit=6&exclude=STREET`;
     const taResp = await fetch(taUrl, {
       headers: { ...BASE_HEADERS, 'Accept': 'application/xml, text/xml, */*' },
     });
     const taText = await taResp.text();
+    console.log('[typeahead] status:', taResp.status, '| body:', taText.slice(0, 300));
 
     let locationId, locationName;
-    // Parse XML: <id>4201441</id><type>POSTCODE</type><displayName>CV37 8FH</displayName>
-    const idMatch = taText.match(/<id>(\d+)<\/id>[\s\S]*?<type>([A-Z_]+)<\/type>[\s\S]*?<displayName>(.*?)<\/displayName>/);
-    if (!idMatch) {
-      return res.status(404).json({ error: `Postcode "${postcode}" not found on Rightmove` });
+
+    // Try JSON first (Rightmove occasionally returns JSON)
+    try {
+      const taJson = JSON.parse(taText);
+      const first = Array.isArray(taJson) ? taJson[0] : taJson?.typeAheadLocations?.[0];
+      if (first?.locationIdentifier) {
+        locationId = first.locationIdentifier;
+        locationName = first.displayName || postcode;
+      }
+    } catch { /* not JSON — fall through to XML */ }
+
+    // Parse XML — extract each field independently (order doesn't matter)
+    if (!locationId) {
+      const idEl    = taText.match(/<id>(\d+)<\/id>/);
+      const typeEl  = taText.match(/<type>([A-Z_]+)<\/type>/);
+      const nameEl  = taText.match(/<displayName>(.*?)<\/displayName>/);
+      if (idEl && typeEl) {
+        locationId   = `${typeEl[1]}^${idEl[1]}`;
+        locationName = nameEl ? nameEl[1] : postcode;
+      }
     }
-    locationId = `${idMatch[2]}^${idMatch[1]}`;   // e.g. "POSTCODE^4201441"
-    locationName = idMatch[3];                      // e.g. "CV37 8FH"
+
+    if (!locationId) {
+      console.error('[typeahead] parse failed. Raw:', taText.slice(0, 500));
+      return res.status(404).json({ error: `Postcode "${postcode}" not found — typeahead returned: ${taText.slice(0,120)}` });
+    }
 
     // ── Step 2: Fetch listings — up to 2 pages (48 properties) ─────────────
     const rawProps = [];
