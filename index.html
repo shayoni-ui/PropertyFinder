@@ -516,8 +516,11 @@
             <label class="check-item"><input type="checkbox" id="filter-nochain" onchange="applyFilters()"> ✓ No chain only</label>
             <label class="check-item"><input type="checkbox" id="filter-culdesac" onchange="applyFilters()"> 🔇 Cul-de-sac only</label>
             <label class="check-item"><input type="checkbox" id="show-avoid" checked onchange="applyFilters()"> ❌ Show 'avoid' properties</label>
-            <label class="check-item"><input type="checkbox" id="show-schools" checked onchange="toggleSchools()"> 🏫 Show schools on map</label>
+            <label class="check-item"><input type="checkbox" id="show-schools" checked onchange="renderSchools()"> 🏫 Show schools on map</label>
+            <label class="check-item" style="padding-left:18px"><input type="checkbox" id="show-state-schools" checked onchange="renderSchools()"> &nbsp;State / Academy</label>
+            <label class="check-item" style="padding-left:18px"><input type="checkbox" id="show-independent-schools" checked onchange="renderSchools()"> &nbsp;Independent</label>
             <label class="check-item"><input type="checkbox" id="show-zones" checked onchange="toggleZones()"> 🎨 Show deprivation zones</label>
+            <label class="check-item"><input type="checkbox" id="show-shops" checked onchange="toggleShops()"> 🛒 Show supermarkets on map</label>
           </div>
         </div>
         <div class="filter-group">
@@ -840,7 +843,8 @@ let ZONES = []; // populated after each search from property IMD data
 // ============================================================
 // MAP INIT
 // ============================================================
-let map, markers = [], schoolMarkers = [], zoneCircles = [], stationMarkers = [], selectedId = null;
+let map, markers = [], schoolMarkers = [], zoneCircles = [], stationMarkers = [], shopMarkers = [], selectedId = null;
+let SUPERMARKETS = [];
 let osmLayer, satelliteLayer;
 
 function initMap() {
@@ -866,13 +870,14 @@ function initMap() {
   fetch('/schools_uk.json')
     .then(r => r.json())
     .then(data => {
-      SCHOOLS = data.map(([n, t, la, lo, o]) => ({
+      SCHOOLS = data.map(([n, t, la, lo, o, f]) => ({
         name: n,
         type: t === 'p' ? 'primary' : 'secondary',
         phase: t === 'p' ? 'Primary' : 'Secondary',
         ofsted: o,
         lat: la,
         lng: lo,
+        funded: f === 'i' ? 'independent' : 'state',
       }));
       document.getElementById('hdr-schools').textContent = SCHOOLS.length.toLocaleString();
       renderSchools();
@@ -924,6 +929,95 @@ function toggleZones() {
 }
 
 // ============================================================
+// SUPERMARKETS (OpenStreetMap Overpass)
+// ============================================================
+const SHOP_BRANDS = {
+  waitrose: { tier:'premium', color:'#1565c0', emoji:'🛍️' },
+  "marks & spencer": { tier:'premium', color:'#1565c0', emoji:'🛍️' },
+  "m&s food": { tier:'premium', color:'#1565c0', emoji:'🛍️' },
+  "whole foods": { tier:'premium', color:'#1565c0', emoji:'🛍️' },
+  "sainsbury's": { tier:'mid', color:'#e65100', emoji:'🧡' },
+  sainsburys: { tier:'mid', color:'#e65100', emoji:'🧡' },
+  tesco: { tier:'mid', color:'#1b5e20', emoji:'💙' },
+  asda: { tier:'mid', color:'#558b2f', emoji:'💚' },
+  morrisons: { tier:'mid', color:'#f9a825', emoji:'💛' },
+  "co-op": { tier:'mid', color:'#00838f', emoji:'🩵' },
+  "co-op food": { tier:'mid', color:'#00838f', emoji:'🩵' },
+  coop: { tier:'mid', color:'#00838f', emoji:'🩵' },
+  lidl: { tier:'discount', color:'#6a1a9a', emoji:'💜' },
+  aldi: { tier:'discount', color:'#e53935', emoji:'❤️' },
+  iceland: { tier:'discount', color:'#0277bd', emoji:'💙' },
+};
+
+function shopInfo(tags) {
+  const raw = (tags.brand || tags.name || '').toLowerCase();
+  for (const [key, val] of Object.entries(SHOP_BRANDS)) {
+    if (raw.includes(key)) return { ...val, brand: tags.brand || tags.name };
+  }
+  return null;
+}
+
+async function fetchSupermarkets(props) {
+  if (!props.length) return;
+  const lats = props.map(p => p.lat).filter(Boolean);
+  const lngs = props.map(p => p.lng).filter(Boolean);
+  const pad = 0.03;
+  const s = Math.min(...lats) - pad, n = Math.max(...lats) + pad;
+  const w = Math.min(...lngs) - pad, e = Math.max(...lngs) + pad;
+
+  const brandFilter = 'Waitrose|Sainsbury|Tesco|Asda|Morrisons|Lidl|Aldi|Iceland|Co-op|M&S|Marks & Spencer|Whole Foods';
+  const q = `[out:json][timeout:15];(node["shop"="supermarket"]["brand"~"${brandFilter}",i](${s},${w},${n},${e});way["shop"="supermarket"]["brand"~"${brandFilter}",i](${s},${w},${n},${e}););out center 40;`;
+  const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q);
+
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    SUPERMARKETS = data.elements
+      .map(el => {
+        const tags = el.tags || {};
+        const info = shopInfo(tags);
+        if (!info) return null;
+        const lat = el.lat ?? el.center?.lat;
+        const lng = el.lon ?? el.center?.lon;
+        if (!lat || !lng) return null;
+        return { name: tags.brand || tags.name, lat, lng, ...info };
+      })
+      .filter(Boolean);
+    renderShops();
+  } catch (e) {
+    console.warn('Supermarket fetch failed:', e.message);
+  }
+}
+
+function renderShops() {
+  shopMarkers.forEach(m => map.removeLayer(m));
+  shopMarkers = [];
+  if (!document.getElementById('show-shops')?.checked) return;
+
+  SUPERMARKETS.forEach(s => {
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="background:white;border:2px solid ${s.color};border-radius:5px;padding:1px 4px;font-size:10px;font-weight:700;color:${s.color};white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.3)">${s.emoji} ${s.name}</div>`,
+      iconAnchor: [0, 10]
+    });
+    const m = L.marker([s.lat, s.lng], { icon }).addTo(map);
+    m.bindPopup(`<div style="font-weight:700">${s.emoji} ${s.name}</div><div style="font-size:11px;color:#555">${s.tier === 'premium' ? '⭐ Premium' : s.tier === 'mid' ? '✅ Mid-range' : '💰 Discount'}</div>`, { maxWidth: 160 });
+    shopMarkers.push(m);
+  });
+}
+
+function toggleShops() {
+  renderShops();
+}
+
+function getNearestShops(lat, lng) {
+  return SUPERMARKETS
+    .map(s => ({ ...s, dist: haversine(lat, lng, s.lat, s.lng) }))
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, 8);
+}
+
+// ============================================================
 // SCHOOLS
 // ============================================================
 function ofstedColor(r) {
@@ -940,12 +1034,16 @@ function renderSchools() {
   if (!SCHOOLS.length) return;
   if (map.getZoom() < 12) return; // don't render 20k dots when zoomed out
 
+  const showState = document.getElementById('show-state-schools')?.checked !== false;
+  const showInd   = document.getElementById('show-independent-schools')?.checked !== false;
+
   const b = map.getBounds();
   const pad = 0.05;
   const visible = SCHOOLS.filter(s =>
     s.lat > b.getSouth() - pad && s.lat < b.getNorth() + pad &&
-    s.lng > b.getWest() - pad && s.lng < b.getEast() + pad
-  ).slice(0, 150); // cap at 150 markers for performance
+    s.lng > b.getWest() - pad && s.lng < b.getEast() + pad &&
+    (s.funded === 'independent' ? showInd : showState)
+  ).slice(0, 200); // cap at 200 markers for performance
 
   visible.forEach(s => {
     const size = s.type === 'secondary' ? 20 : 16;
@@ -957,16 +1055,15 @@ function renderSchools() {
     const m = L.marker([s.lat, s.lng], {icon}).addTo(map);
     m.bindPopup(`
       <div class="school-popup-title">${s.type==='secondary'?'🎓':'🏫'} ${s.name}</div>
-      <div class="school-popup-sub">${s.phase}</div>
-      <div class="popup-row">Ofsted <span><span class="ofsted-badge ofsted-${s.ofsted.replace(/ /g,'-').toLowerCase()}">${s.ofsted}</span></span></div>
-    `, {maxWidth:220});
+      <div class="school-popup-sub">${s.phase} &nbsp;·&nbsp; ${s.funded==='independent'?'<span style="color:#f59e0b">🔑 Independent</span>':'<span style="color:#60a5fa">🏛 State</span>'}</div>
+      ${s.ofsted ? `<div class="popup-row">Ofsted <span><span class="ofsted-badge ofsted-${s.ofsted.replace(/ /g,'-').toLowerCase()}">${s.ofsted}</span></span></div>` : '<div class="popup-row" style="color:#8892b0">No Ofsted rating</div>'}
+    `, {maxWidth:240});
     schoolMarkers.push(m);
   });
 }
 
 function toggleSchools() {
-  const show = document.getElementById('show-schools').checked;
-  schoolMarkers.forEach(m => show ? m.addTo(map) : map.removeLayer(m));
+  renderSchools(); // re-render with current state/independent checkboxes
 }
 
 // ============================================================
@@ -1284,6 +1381,8 @@ function resetFilters() {
   document.getElementById('filter-culdesac').checked = false;
   document.getElementById('show-avoid').checked = true;
   document.getElementById('size-filter-on').checked = false;
+  document.getElementById('show-state-schools').checked = true;
+  document.getElementById('show-independent-schools').checked = true;
   updatePriceDisplay();
   updateIMDDisplay();
   applyFilters();
@@ -1386,6 +1485,7 @@ function selectProperty(id) {
     <div class="detail-tabs">
       <div class="detail-tab active" onclick="switchTab(this,'tab-score')">Score</div>
       <div class="detail-tab" onclick="switchTab(this,'tab-schools')">Schools</div>
+      <div class="detail-tab" onclick="switchTab(this,'tab-shops')">🛒 Shops</div>
       <div class="detail-tab" onclick="switchTab(this,'tab-depriv')">Deprivation</div>
     </div>
 
@@ -1444,21 +1544,58 @@ function selectProperty(id) {
     <div id="tab-schools" class="tab-content">
       <div class="schools-section">
         <h3>Nearby Schools (within 2.5km)</h3>
-        ${nearby.length ? nearby.map(s => `
-          <div class="school-item">
-            <div class="school-icon ${s.type==='secondary'?'school-secondary-icon':'school-primary-icon'}">${s.type==='secondary'?'🎓':'🏫'}</div>
-            <div class="school-info">
-              <div class="school-name">${s.name}</div>
-              <div class="school-meta">
-                <span class="ofsted-badge ofsted-${s.ofsted.replace(/ /g,'-').toLowerCase()}">${s.ofsted}</span>
-                <span>${s.phase}</span>
-                <span>${s.dist.toFixed(1)}km</span>
+        ${(() => {
+          if (!nearby.length) return '<div style="color:var(--muted);font-size:12px;padding:10px 0">No schools data within 2.5km</div>';
+          const stateSchools = nearby.filter(s => s.funded !== 'independent');
+          const indSchools   = nearby.filter(s => s.funded === 'independent');
+          const renderItem = s => `
+            <div class="school-item">
+              <div class="school-icon ${s.type==='secondary'?'school-secondary-icon':'school-primary-icon'}">${s.type==='secondary'?'🎓':'🏫'}</div>
+              <div class="school-info">
+                <div class="school-name">${s.name}</div>
+                <div class="school-meta">
+                  ${s.ofsted ? `<span class="ofsted-badge ofsted-${s.ofsted.replace(/ /g,'-').toLowerCase()}">${s.ofsted}</span>` : '<span style="color:#546e7a;font-size:10px">No rating</span>'}
+                  <span>${s.phase}</span>
+                  <span>${s.dist.toFixed(1)}km</span>
+                </div>
               </div>
-              ${(s.attainment8||s.ks2) ? `<div class="school-meta" style="margin-top:3px">${s.type==='secondary'?`Att8: ${s.attainment8} | P8: ${s.progress8>=0?'+':''}${s.progress8}`:`KS2: ${s.ks2}%`}</div>` : ''}
-              ${s.note ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;font-style:italic">${s.note}</div>` : ''}
+            </div>`;
+          let html = '';
+          if (stateSchools.length) {
+            html += `<div style="font-size:10px;color:#60a5fa;font-weight:700;letter-spacing:0.5px;margin:8px 0 4px;text-transform:uppercase">🏛 State / Academy (${stateSchools.length})</div>`;
+            html += stateSchools.map(renderItem).join('');
+          }
+          if (indSchools.length) {
+            html += `<div style="font-size:10px;color:#f59e0b;font-weight:700;letter-spacing:0.5px;margin:12px 0 4px;text-transform:uppercase">🔑 Independent (${indSchools.length})</div>`;
+            html += indSchools.map(renderItem).join('');
+          }
+          return html;
+        })()}
+      </div>
+    </div>
+
+    <!-- SHOPS TAB -->
+    <div id="tab-shops" class="tab-content">
+      <div class="schools-section">
+        <h3>🛒 Nearest Supermarkets</h3>
+        ${(() => {
+          const shops = getNearestShops(p.lat, p.lng).slice(0, 8);
+          if (!shops.length) return '<div style="color:var(--muted);font-size:12px;padding:10px 0">No supermarket data yet — search for a postcode to load shops.</div>';
+          const tierLabel = t => t === 'premium' ? '⭐ Premium' : t === 'mid' ? '✅ Mid-range' : '💰 Discount';
+          return shops.map((s, i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < shops.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
+              <div style="width:36px;height:36px;background:white;border:2px solid ${s.color};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${s.emoji}</div>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">${s.name}</div>
+                <div style="font-size:11px;color:var(--muted)">${tierLabel(s.tier)}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:14px;font-weight:700;color:${i===0?s.color:'var(--muted)'}">${s.dist < 1 ? Math.round(s.dist*1000)+'m' : s.dist.toFixed(1)+'km'}</div>
+                ${i===0 ? '<div style="font-size:9px;color:var(--accent)">nearest</div>' : ''}
+              </div>
             </div>
-          </div>
-        `).join('') : '<div style="color:var(--muted);font-size:12px;padding:10px 0">No schools data within 2.5km</div>'}
+          `).join('');
+        })()}
       </div>
     </div>
 
@@ -1763,6 +1900,7 @@ async function searchProperties(postcode) {
     PROPERTIES = [...fetched, ...custom];
 
     buildZonesFromProperties(fetched);
+    fetchSupermarkets(fetched);
     showToast(`✅ ${data.properties.length} properties found near ${data.locationName || postcode}`);
     applyFilters();
   } catch (err) {
