@@ -379,23 +379,24 @@
     <div class="sheet-handle" onclick="closeMobileSheets()"></div>
 
     <!-- Postcode Search (always visible, top of sidebar) -->
-    <div style="padding:10px 12px 8px;border-bottom:1px solid var(--border);background:var(--surface)">
-      <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">📍 Search Area</div>
-      <div style="display:flex;gap:6px">
-        <input type="text" id="sidebar-postcode-input" placeholder="Enter postcode e.g. CV37 8FH"
-          style="flex:1;background:var(--surface2);border:1.5px solid var(--accent);border-radius:7px;padding:8px 10px;font-size:13px;color:var(--text);min-width:0;outline:none"
-          onkeydown="if(event.key==='Enter')doSidebarSearch()"
-          oninput="document.getElementById('postcode-input').value=this.value">
+    <div style="padding:12px 14px 10px;border-bottom:2px solid var(--accent);background:var(--surface)">
+      <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:7px">📍 Search Area</div>
+      <input type="text" id="sidebar-postcode-input" placeholder="Enter postcode, e.g. CV37 8FH"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1.5px solid var(--accent);border-radius:7px;padding:10px 12px;font-size:14px;color:var(--text);outline:none;display:block;margin-bottom:8px"
+        onkeydown="if(event.key==='Enter')doSidebarSearch()"
+        oninput="document.getElementById('postcode-input').value=this.value">
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:11px;color:var(--muted);flex-shrink:0">Radius:</label>
         <select id="sidebar-radius"
-          style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 6px;font-size:12px;cursor:pointer">
+          style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:8px 8px;font-size:12px;cursor:pointer;width:90px;flex-shrink:0">
           <option value="0.5">0.5 mi</option>
           <option value="1.0" selected>1 mi</option>
           <option value="3.0">3 mi</option>
           <option value="5.0">5 mi</option>
         </select>
         <button onclick="doSidebarSearch()"
-          style="background:var(--accent);color:white;border:none;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">
-          Search
+          style="flex:1;background:var(--accent);color:white;border:none;border-radius:7px;padding:9px 0;font-size:13px;font-weight:700;cursor:pointer">
+          🔍 Search
         </button>
       </div>
     </div>
