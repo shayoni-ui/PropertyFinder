@@ -651,11 +651,10 @@ function calcScore(p) {
 
   // 3. Crime Safety (20 pts max) — from police.uk API (async, cached)
   let crimeScore = 10; // default until data loads
-  let crimeLoaded = false;
   const crimeKey = crimeMapKey(p.lat, p.lng);
-  const crime = CRIME_DATA.get(crimeKey);
+  const crimeLoaded = CRIME_DATA.has(crimeKey); // true once fetched (success OR fail)
+  const crime = CRIME_DATA.get(crimeKey);       // null = fetched but failed/unavailable
   if (crime) {
-    crimeLoaded = true;
     // total = all crimes within ~1 mile radius over 1 month
     if      (crime.total <= 10)  crimeScore = 20;
     else if (crime.total <= 25)  crimeScore = 17;
@@ -869,11 +868,21 @@ function crimeMapKey(lat, lng) {
   return `${lat.toFixed(2)}_${lng.toFixed(2)}`;
 }
 
-// Get the most recently available month (police.uk typically lags ~2-3 months)
-function policeMonth() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 3);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+// Get candidate months to try (police.uk lags ~2-4 months; try several)
+function policeMonths() {
+  return [2, 3, 4, 5].map(offset => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - offset);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+}
+
+// Fetch with a manual timeout compatible with all browsers
+function fetchWithTimeout(url, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    fetch(url).then(r => { clearTimeout(timer); resolve(r); }, e => { clearTimeout(timer); reject(e); });
+  });
 }
 
 const CRIME_CATS = {
@@ -906,34 +915,33 @@ async function fetchCrimeForProperty(p) {
   const key = crimeMapKey(p.lat, p.lng);
   if (CRIME_DATA.has(key)) return CRIME_DATA.get(key);
 
-  const date = policeMonth();
-  const url = `https://data.police.uk/api/crimes-street/all-crime?lat=${p.lat}&lng=${p.lng}&date=${date}`;
-  try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!resp.ok) { CRIME_DATA.set(key, null); return null; }
-    const crimes = await resp.json();
-    if (!Array.isArray(crimes)) { CRIME_DATA.set(key, null); return null; }
+  // Try recent months in order until one returns data
+  for (const date of policeMonths()) {
+    const url = `https://data.police.uk/api/crimes-street/all-crime?lat=${p.lat}&lng=${p.lng}&date=${date}`;
+    try {
+      const resp = await fetchWithTimeout(url, 10000);
+      if (!resp.ok) continue; // try next month
+      const crimes = await resp.json();
+      if (!Array.isArray(crimes) || crimes.length === 0) continue; // empty — try next month
 
-    // Aggregate by category
-    const byCat = {};
-    crimes.forEach(c => { byCat[c.category] = (byCat[c.category] || 0) + 1; });
-    const serious = Object.entries(byCat)
-      .filter(([cat]) => CRIME_CATS[cat]?.serious)
-      .reduce((s, [, n]) => s + n, 0);
+      const byCat = {};
+      crimes.forEach(c => { byCat[c.category] = (byCat[c.category] || 0) + 1; });
+      const serious = Object.entries(byCat)
+        .filter(([cat]) => CRIME_CATS[cat]?.serious)
+        .reduce((s, [, n]) => s + n, 0);
 
-    const stats = {
-      total: crimes.length,
-      serious,
-      byCat,
-      month: date,
-      rating: crimeRating(crimes.length),
-    };
-    CRIME_DATA.set(key, stats);
-    return stats;
-  } catch (e) {
-    CRIME_DATA.set(key, null);
-    return null;
+      const stats = { total: crimes.length, serious, byCat, month: date, rating: crimeRating(crimes.length) };
+      CRIME_DATA.set(key, stats);
+      return stats;
+    } catch (e) {
+      // timeout or network error — try next month
+      continue;
+    }
   }
+
+  // All months failed — mark as checked so we don't retry
+  CRIME_DATA.set(key, null);
+  return null;
 }
 
 async function fetchAllCrimeData(props) {
@@ -1541,11 +1549,12 @@ function renderList(props) {
         <div class="imd-dot" style="background:${getIMDColor(p.imd)}"></div>
         <div class="prop-meta-text">IMD ${p.imd} • ${p.area} • 🚂 ${(()=>{const st=getNearestStation(p.lat,p.lng);return `${walkMins(st.dist)} to ${st.name}`;})()}</div>
       </div>
-      ${p.scoreBreakdown?.crimeLoaded && p.scoreBreakdown?.crimeStats ? `
+      ${p.scoreBreakdown?.crimeLoaded ? (p.scoreBreakdown.crimeStats ? `
       <div style="margin-top:5px;font-size:10px;display:flex;align-items:center;gap:5px">
         <span style="color:${p.scoreBreakdown.crimeStats.rating.color}">🚔 ${p.scoreBreakdown.crimeStats.rating.label} crime</span>
-        <span style="color:var(--muted)">(${p.scoreBreakdown.crimeStats.total} incidents)</span>
-      </div>` : ''}
+        <span style="color:var(--muted)">(${p.scoreBreakdown.crimeStats.total} incidents · ${p.scoreBreakdown.crimeStats.month})</span>
+      </div>` : `
+      <div style="margin-top:5px;font-size:10px;color:#546e7a">🚔 Crime data unavailable for this area</div>`) : ''}
     </div>
   `).join('');
 }
@@ -1629,7 +1638,7 @@ function selectProperty(id) {
         </div>
         <div class="score-bar-row">
           <div class="score-bar-label">
-            <span>🚔 Crime Safety ${!p.scoreBreakdown.crimeLoaded ? '<span style="font-size:9px;color:#ffc107">(loading…)</span>' : ''}</span>
+            <span>🚔 Crime Safety ${!p.scoreBreakdown.crimeLoaded ? '<span style="font-size:9px;color:#ffc107">(loading…)</span>' : p.scoreBreakdown.crimeLoaded && !p.scoreBreakdown.crimeStats ? '<span style="font-size:9px;color:#546e7a">(unavailable)</span>' : ''}</span>
             <strong style="color:${p.scoreBreakdown.crimeStats ? p.scoreBreakdown.crimeStats.rating.color : 'var(--muted)'}">${p.scoreBreakdown.crimeScore}/20</strong>
           </div>
           <div class="score-bar-bg"><div class="score-bar-fill" style="width:${(p.scoreBreakdown.crimeScore/20)*100}%;background:${p.scoreBreakdown.crimeStats ? p.scoreBreakdown.crimeStats.rating.color : '#607d8b'}"></div></div>
