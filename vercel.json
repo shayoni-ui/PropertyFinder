@@ -4,5 +4,11 @@
     "api/search.js": {
       "maxDuration": 60
     }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "staging": true
+    }
   }
 }
