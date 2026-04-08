@@ -1,5 +1,8 @@
-// Vercel serverless function — proxies Rightmove search + enriches with IMD decile
+// Vercel serverless function — proxies Rightmove search + enriches with IMD 2025 decile
 // Route: GET /api/search?postcode=CV37+8FH&radius=1.0&minBeds=3&minPrice=0&maxPrice=500000
+
+// IMD 2025 lookup: LSOA code (2021) → decile (1=most deprived, 10=least deprived)
+const IMD2025 = require('./imd2025.json');
 
 const BASE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -83,12 +86,13 @@ module.exports = async function handler(req, res) {
       return res.json({ properties: [], total: 0, locationName });
     }
 
-    // ── Step 4: Bulk reverse-geocode all properties lat/lng → postcodes ─────
+    // ── Step 4: Bulk reverse-geocode lat/lng → LSOA codes via postcodes.io ──
+    // postcodes.io returns codes.lsoa21 (2021 census LSOA) which matches IMD 2025
     const geoWithIndex = rawProps
       .map((p, i) => ({ i, lat: p.location?.latitude, lng: p.location?.longitude }))
       .filter(g => g.lat && g.lng);
 
-    let postcodeByIndex = {};
+    const imdByIndex = {};
     try {
       const bulkResp = await fetch('https://api.postcodes.io/postcodes', {
         method: 'POST',
@@ -98,37 +102,21 @@ module.exports = async function handler(req, res) {
             longitude: g.lng,
             latitude: g.lat,
             limit: 1,
-            radius: 200,
+            radius: 300,
           })),
         }),
       });
       const bulkData = await bulkResp.json();
       bulkData.result?.forEach((item, bi) => {
-        const pc = item.result?.[0]?.postcode;
-        if (pc) postcodeByIndex[geoWithIndex[bi].i] = pc;
+        // Prefer 2021 LSOA code; fall back to generic lsoa code
+        const lsoa = item.result?.[0]?.codes?.lsoa21 || item.result?.[0]?.codes?.lsoa;
+        if (lsoa && IMD2025[lsoa] !== undefined) {
+          imdByIndex[geoWithIndex[bi].i] = IMD2025[lsoa];
+        }
       });
     } catch { /* IMD will fall back to 5 */ }
 
-    // ── Step 5: Fetch IMD decile for each postcode (parallel) ───────────────
-    // findthatpostcode.uk returns raw IMD rank (1=most deprived, 32844=least)
-    // Convert to decile 1-10: Math.ceil(rank * 10 / 32844)
-    const imdByIndex = {};
-    await Promise.allSettled(
-      Object.entries(postcodeByIndex).map(async ([idx, pc]) => {
-        try {
-          const r = await fetch(
-            `https://findthatpostcode.uk/postcodes/${encodeURIComponent(pc)}.json`
-          );
-          const j = await r.json();
-          const rank = j?.data?.attributes?.imd;
-          if (rank) {
-            imdByIndex[Number(idx)] = Math.min(10, Math.max(1, Math.ceil((rank * 10) / 32844)));
-          }
-        } catch { /* leave as default */ }
-      })
-    );
-
-    // ── Step 6: Assemble final property objects ──────────────────────────────
+    // ── Step 5: Assemble final property objects ──────────────────────────────
     const properties = rawProps.map((p, i) => {
       const featureArr = p.keyFeatures ?? [];
       const summary = p.summary ?? '';
