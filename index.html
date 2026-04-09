@@ -1597,14 +1597,19 @@ function selectProperty(id) {
         <span class="chip">🏠 ${p.ptype}</span>
         <span class="chip">🚿 ${p.baths} bath</span>
         <span class="chip" style="color:${p.parking==='garage'?'#ffb74d':p.parking==='driveway'?'#80cbc4':'#90a4ae'}">${p.parking==='garage'?'🚗 Garage':p.parking==='driveway'?'🅿️ Driveway':'🛣️ On-road'}</span>
-        <span class="chip" style="color:${p.epc==='A'||p.epc==='B'?'#66bb6a':p.epc==='C'?'#a5d6a7':p.epc==='D'?'#fff176':p.epc==='E'?'#ffb74d':'#ef9a9a'}">⚡ EPC ${p.epc}</span>
+        <span class="chip" style="color:${p.epc==='A'||p.epc==='B'?'#66bb6a':p.epc==='C'?'#a5d6a7':p.epc==='D'?'#fff176':p.epc==='E'?'#ffb74d':'#ef9a9a'}">
+          ⚡ EPC ${p.epc}${p.epcVerified?'<span style="font-size:9px;margin-left:3px;opacity:0.7">✓ cert</span>':''}
+          ${p.epcPotential && p.epcPotential !== p.epc ? `<span style="font-size:9px;opacity:0.6"> → ${p.epcPotential}</span>` : ''}
+        </span>
         <span class="chip" style="color:${p.ctax==='A'||p.ctax==='B'?'#66bb6a':p.ctax==='C'?'#a5d6a7':p.ctax==='D'?'#fff176':'#ffb74d'}">🏛️ Band ${p.ctax}</span>
         ${p.culdesac?'<span class="chip" style="color:#b39ddb">🔇 Cul-de-sac</span>':''}
         ${p.nochain?'<span class="chip" style="color:#66bb6a">✓ No Chain</span>':''}
         ${p.renovated?'<span class="chip" style="color:#ffd54f">✓ Renovated</span>':''}
         ${p.extended?'<span class="chip" style="color:#4fc3f7">↔ Extended</span>':''}
         ${p.largeplot?'<span class="chip" style="color:#aed581">🌳 Large Plot</span>':''}
-        ${p.sqft ? `<span class="chip" style="color:#4db6ac">📐 ${p.sqft} sqft / ${sqftToSqm(p.sqft)} sqm</span>` : '<span class="chip" style="color:#546e7a">📐 Size not listed</span>'}
+        ${p.propertyForm?`<span class="chip" style="color:#90a4ae">🏘 ${p.propertyForm}</span>`:''}
+        ${p.heatingType?`<span class="chip" style="color:#ce93d8">🔥 ${p.heatingType.replace(/\(.*?\)/g,'').trim()}</span>`:''}
+        ${p.sqft ? `<span class="chip" style="color:#4db6ac">📐 ${p.sqft} sqft / ${sqftToSqm(p.sqft)} sqm${p.epcVerified?' <span style="font-size:9px;opacity:0.7">✓ cert</span>':''}</span>` : '<span class="chip" style="color:#546e7a">📐 Size not listed</span>'}
         ${p.sqft ? `<span class="chip" style="color:#80cbc4">£${Math.round(p.price/p.sqft)}/sqft</span>` : ''}
         ${(()=>{const st=getNearestStation(p.lat,p.lng);return `<span class="chip" style="color:#ce93d8">🚂 ${walkMins(st.dist)} to ${st.name}</span>`;})()}
       </div>
@@ -1664,6 +1669,19 @@ function selectProperty(id) {
         </div>
         <div style="margin-top:10px;font-size:10px;color:var(--muted);line-height:1.5;padding:8px;background:var(--surface2);border-radius:6px">
           <strong style="color:var(--text)">Algorithm:</strong> IMD Decile (30 pts) + School Ofsted (30 pts) + Crime Safety (20 pts, police.uk) + Property Features (20 pts)
+        </div>
+        ${p.epcVerified ? `
+        <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:8px;border-left:3px solid #4db6ac">
+          <div style="font-size:11px;font-weight:700;color:#4db6ac;margin-bottom:7px">⚡ Official EPC Certificate</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px">
+            <div><span style="color:var(--muted)">Current rating</span><br><strong style="color:${p.epc==='A'||p.epc==='B'?'#66bb6a':p.epc==='C'?'#a5d6a7':p.epc==='D'?'#fff176':p.epc==='E'?'#ffb74d':'#ef9a9a'};font-size:18px">${p.epc}</strong></div>
+            <div><span style="color:var(--muted)">Potential</span><br><strong style="color:#66bb6a;font-size:18px">${p.epcPotential || '—'}</strong></div>
+            <div><span style="color:var(--muted)">Floor area</span><br><strong>${p.sqft ? `${sqftToSqm(p.sqft)} m² / ${p.sqft} sqft` : '—'}</strong></div>
+            <div><span style="color:var(--muted)">Heating</span><br><strong>${p.heatingType ? p.heatingType.replace(/\(.*?\)/g,'').trim() : '—'}</strong></div>
+            <div><span style="color:var(--muted)">Built form</span><br><strong>${p.propertyForm || '—'}</strong></div>
+            <div><span style="color:var(--muted)">Cert date</span><br><strong>${p.epcDate || '—'}</strong></div>
+          </div>
+        </div>` : '<div style="margin-top:8px;font-size:10px;color:#546e7a;padding:6px 8px;background:var(--surface2);border-radius:6px">📋 No EPC certificate found — rating inferred from listing text</div>'}
         </div>
       </div>
       <!-- TRAIN STATIONS IN SCORE TAB -->

@@ -1,8 +1,68 @@
-// Vercel serverless function — proxies Rightmove search + enriches with IMD 2025 decile
+// Vercel serverless function — proxies Rightmove search + enriches with IMD 2025 + EPC data
 // Route: GET /api/search?postcode=CV37+8FH&radius=1.0&minBeds=3&minPrice=0&maxPrice=500000
 
 // IMD 2025 lookup: LSOA code (2021) → decile (1=most deprived, 10=least deprived)
 const IMD2025 = require('./imd2025.json');
+
+// ── EPC helpers ───────────────────────────────────────────────────────────────
+const EPC_AUTH = Buffer.from(
+  `${process.env.EPC_EMAIL || 'shayoni08@gmail.com'}:${process.env.EPC_KEY || '6d4a0050956a985b5a27f7a8251f7f02130a1db1'}`
+).toString('base64');
+
+// Normalise address string for fuzzy matching
+function normAddr(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Find best matching EPC cert for a property address within a postcode's certs
+function matchEPC(address, certs) {
+  if (!certs || !certs.length) return null;
+  const target = normAddr(address);
+
+  let best = null, bestScore = 0;
+  for (const cert of certs) {
+    const certAddr = normAddr(
+      [cert['address1'], cert['address2'], cert['address3']].filter(Boolean).join(' ')
+    );
+    if (!certAddr) continue;
+
+    // Extract house number from both — must match if present
+    const numT = (target.match(/^\d+/) || [])[0];
+    const numC = (certAddr.match(/^\d+/) || [])[0];
+    if (numT && numC && numT !== numC) continue;
+
+    // Score by common leading characters of street name
+    let score = 0;
+    const minLen = Math.min(certAddr.length, target.length);
+    for (let i = 0; i < minLen; i++) {
+      if (certAddr[i] === target[i]) score++; else break;
+    }
+    if (score > bestScore) { bestScore = score; best = cert; }
+  }
+
+  return bestScore >= 4 ? best : null; // require at least 4 chars match
+}
+
+// Fetch all EPC certs for a set of unique postcodes
+async function fetchEPCByPostcodes(postcodes) {
+  const epcMap = {}; // postcode → array of certs
+  await Promise.allSettled(postcodes.map(async pc => {
+    try {
+      const url = `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${encodeURIComponent(pc)}&size=100`;
+      const r = await fetch(url, {
+        headers: { 'Authorization': `Basic ${EPC_AUTH}`, 'Accept': 'application/json' },
+      });
+      if (!r.ok) return;
+      const data = await r.json();
+      // Sort by lodgement date desc so we match to most recent cert
+      const rows = (data.rows || []).sort((a, b) =>
+        (b['lodgement-date'] || '').localeCompare(a['lodgement-date'] || '')
+      );
+      epcMap[pc.replace(/\s+/g, '').toUpperCase()] = rows;
+    } catch { /* skip */ }
+  }));
+  return epcMap;
+}
 
 const BASE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -116,11 +176,56 @@ module.exports = async function handler(req, res) {
       });
     } catch { /* IMD will fall back to 5 */ }
 
-    // ── Step 5: Assemble final property objects ──────────────────────────────
+    // ── Step 5: Fetch EPC certificates by postcode ───────────────────────────
+    // Collect unique postcodes from the bulk reverse-geocode results then query
+    // the EPC Open Data Communities API (free, authenticated)
+    const postcodeByIndex2 = {};
+    try {
+      const bulkResp2 = await fetch('https://api.postcodes.io/postcodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          geolocations: geoWithIndex.map(g => ({
+            longitude: g.lng, latitude: g.lat, limit: 1, radius: 300,
+          })),
+        }),
+      });
+      const bd2 = await bulkResp2.json();
+      bd2.result?.forEach((item, bi) => {
+        const pc = item.result?.[0]?.postcode;
+        if (pc) postcodeByIndex2[geoWithIndex[bi].i] = pc.replace(/\s+/g, '').toUpperCase();
+      });
+    } catch { /* EPC will be skipped */ }
+
+    const uniquePostcodes = [...new Set(Object.values(postcodeByIndex2))];
+    const epcMap = uniquePostcodes.length ? await fetchEPCByPostcodes(uniquePostcodes) : {};
+
+    // ── Step 6: Assemble final property objects ──────────────────────────────
     const properties = rawProps.map((p, i) => {
       const featureArr = p.keyFeatures ?? [];
       const summary = p.summary ?? '';
       const fl = [...featureArr, summary].join(' ').toLowerCase();
+
+      // EPC certificate match
+      const pc = postcodeByIndex2[i];
+      const certs = pc ? (epcMap[pc] || []) : [];
+      const cert = matchEPC(p.displayAddress, certs);
+
+      // Floor area: EPC cert (m² → sqft) preferred; fall back to listing text
+      const epcSqm = cert ? parseFloat(cert['total-floor-area']) : null;
+      const epcSqft = epcSqm ? Math.round(epcSqm * 10.764) : null;
+      const listingSqft = (() => {
+        const m = fl.match(/(\d[\d,]*)\s*sq\.?\s*ft/i);
+        return m ? parseInt(m[1].replace(/,/g, '')) : null;
+      })();
+      const sqft = epcSqft || listingSqft;
+
+      // EPC rating: cert preferred over inferred from text
+      const epcRating = cert?.['current-energy-rating'] || inferEPC(fl);
+      const epcPotential = cert?.['potential-energy-rating'] || null;
+      const heatingType = cert?.['main-fuel'] || null;
+      const epcDate = cert?.['lodgement-date'] || null;
+      const propertyForm = cert?.['built-form'] || null;
 
       return {
         id: +(p.id ?? p.propertyId ?? (i + 100000)),
@@ -131,14 +236,19 @@ module.exports = async function handler(req, res) {
         baths: p.bathrooms ?? 1,
         ptype: normaliseType(p.propertySubType),
         parking: inferParking(fl),
-        epc: inferEPC(fl),
+        epc: epcRating,
+        epcPotential,
+        heatingType,
+        epcDate,
+        propertyForm,
+        epcVerified: !!cert,
         ctax: inferCTax(fl),
         nochain: /no chain|chain[- ]free|no onward chain|vacant possession/i.test(fl),
         culdesac: /cul[- ]de[- ]sac/i.test(fl),
         extended: /\bextended\b|single.storey extension|rear extension/i.test(fl),
         renovated: /renovated|refurbished|modernised|modernized/i.test(fl),
         largeplot: /large (?:garden|plot)|substantial (?:garden|plot)|generous (?:garden|plot)/i.test(fl),
-        sqft: null,
+        sqft,
         lat: p.location?.latitude ?? null,
         lng: p.location?.longitude ?? null,
         imd: imdByIndex[i] ?? 5,
