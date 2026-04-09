@@ -1620,6 +1620,7 @@ function selectProperty(id) {
       <div class="detail-tab" onclick="switchTab(this,'tab-schools')">Schools</div>
       <div class="detail-tab" onclick="switchTab(this,'tab-shops')">🛒 Shops</div>
       <div class="detail-tab" onclick="switchTab(this,'tab-depriv')">Deprivation</div>
+      <div class="detail-tab" onclick="switchTab(this,'tab-sold')">💰 Sold</div>
     </div>
 
     <!-- SCORE TAB -->
@@ -1793,6 +1794,17 @@ function selectProperty(id) {
       </div>
     </div>
 
+    <!-- SOLD PRICES TAB -->
+    <div id="tab-sold" class="tab-content">
+      <div class="score-section" style="border-bottom:none">
+        <h3>💰 Recent Sold Prices</h3>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">${p.postcode} · HM Land Registry</div>
+        <div id="sold-prices-inner">
+          <div style="color:var(--muted);font-size:12px;padding:10px 0;font-style:italic">⏳ Loading sold prices…</div>
+        </div>
+      </div>
+    </div>
+
     ${p.summary ? `<div style="padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--muted);line-height:1.6"><strong style="color:var(--text)">About this property</strong><br>${p.summary}${p.addedDate ? `<br><span style="color:var(--accent);margin-top:4px;display:block">Listed: ${new Date(p.addedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</span>` : ''}</div>` : ''}
     <div class="actions-section">
       <a class="action-btn" href="${p.url}" target="_blank"><span class="btn-icon">🏠</span>View on Rightmove</a>
@@ -1802,6 +1814,9 @@ function selectProperty(id) {
   `;
   // Default to score tab
   switchTab(document.querySelector('.detail-tab'), 'tab-score');
+
+  // Async: load sold prices in background so tab is ready when clicked
+  fetchSoldPrices(p.postcode);
 
   // On mobile: close sidebar, show detail sheet
   if (isMobile()) {
@@ -1826,6 +1841,54 @@ function closeDetail() {
   document.querySelectorAll('.prop-card').forEach(c => c.classList.remove('selected'));
   // On mobile, close backdrop too
   document.getElementById('mob-backdrop').classList.remove('show');
+}
+
+// ============================================================
+// LAND REGISTRY SOLD PRICES
+// ============================================================
+async function fetchSoldPrices(postcode) {
+  const container = document.getElementById('sold-prices-inner');
+  if (!container) return;
+  const encoded = encodeURIComponent(postcode.trim().toUpperCase());
+  const url = `https://landregistry.data.gov.uk/data/ppi/transaction-record.json?propertyAddress.postcode=${encoded}&_pageSize=20&_sort=-transactionDate`;
+  try {
+    const res = await fetchWithTimeout(url, 12000);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const items = (data.result && data.result.items) || [];
+    if (!items.length) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">No sold prices recorded for this postcode yet.</div>';
+      return;
+    }
+    const typeMap = { D:'Detached', S:'Semi-detached', T:'Terraced', F:'Flat / Maisonette', O:'Other' };
+    const estMap  = { F:'Freehold', L:'Leasehold' };
+    const rows = items.map((item, i) => {
+      const addr = item.propertyAddress || {};
+      const parts = [addr.paon, addr.saon, addr.street].filter(Boolean);
+      const addrStr = parts.join(' ') || '—';
+      const dateStr = item.transactionDate
+        ? new Date(item.transactionDate).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' })
+        : '—';
+      const price = item.pricePaid != null ? '£' + Number(item.pricePaid).toLocaleString('en-GB') : '—';
+      const type  = typeMap[item.propertyType] || item.propertyType || '—';
+      const est   = estMap[item.estateType]   || '—';
+      const priceColor = item.pricePaid > 500000 ? '#ef9a9a' : item.pricePaid > 250000 ? '#ffb74d' : '#66bb6a';
+      return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;${i<items.length-1?'border-bottom:1px solid var(--border)':''}">
+        <div style="flex:1;min-width:0;padding-right:8px">
+          <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${addrStr}">${addrStr}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${type} · ${est}</div>
+          <div style="font-size:10px;color:var(--muted)">${dateStr}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:14px;font-weight:700;color:${priceColor}">${price}</div>
+        </div>
+      </div>`;
+    }).join('');
+    container.innerHTML = rows +
+      '<div style="font-size:10px;color:#546e7a;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">📡 HM Land Registry Price Paid Data · Crown copyright</div>';
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">⚠️ Could not load sold prices — try again later.</div>';
+  }
 }
 
 // ============================================================
