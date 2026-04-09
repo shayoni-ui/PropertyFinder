@@ -622,6 +622,8 @@
 
 // UK-wide schools loaded from /schools_uk.json (19,970 schools, Ofsted Aug 2024)
 let SCHOOLS = [];
+// OS Open Greenspace: parks, play spaces, playing fields loaded from /greenspaces_gb.json
+let GREENSPACES = [];
 const CRIME_DATA = new Map(); // crime stats keyed by rounded lat/lng — populated async after each search
 
 // ============================================================
@@ -1004,6 +1006,15 @@ function initMap() {
       renderSchools();
     })
     .catch(() => console.warn('Schools data unavailable'));
+
+  // Load OS Open Greenspace data (parks, play spaces, playing fields)
+  fetch('/greenspaces_gb.json')
+    .then(r => r.json())
+    .then(data => {
+      GREENSPACES = data.map(([name, type, lat, lng]) => ({ name, type, lat, lng }));
+      console.log(`Greenspaces loaded: ${GREENSPACES.length}`);
+    })
+    .catch(() => console.warn('Greenspace data unavailable'));
 }
 
 function setMapLayer(type, btn) {
@@ -1683,6 +1694,35 @@ function selectProperty(id) {
             <div><span style="color:var(--muted)">Cert date</span><br><strong>${p.epcDate || '—'}</strong></div>
           </div>
         </div>` : '<div style="margin-top:8px;font-size:10px;color:#546e7a;padding:6px 8px;background:var(--surface2);border-radius:6px">📋 No EPC certificate found — rating inferred from listing text</div>'}
+      </div>
+      <!-- GREEN SPACES IN SCORE TAB -->
+      <div class="score-section">
+        <h3>🌳 Nearest Green Spaces</h3>
+        ${(()=>{
+          if (!GREENSPACES.length) return '<div style="color:var(--muted);font-size:12px;padding:6px 0;font-style:italic">Green space data loading…</div>';
+          const TYPE_LABEL = { park:'Public Park', play:'Play Space', field:'Playing Field' };
+          const TYPE_EMOJI = { park:'🌳', play:'🛝', field:'⚽' };
+          const TYPE_COLOR = { park:'#66bb6a', play:'#ffa726', field:'#42a5f5' };
+          const nearest = GREENSPACES
+            .map(g => ({ ...g, dist: haversine(p.lat, p.lng, g.lat, g.lng) }))
+            .filter(g => g.dist < 3)
+            .sort((a, b) => a.dist - b.dist)
+            .slice(0, 5);
+          if (!nearest.length) return '<div style="color:var(--muted);font-size:12px;padding:6px 0">No green spaces found within 3 km</div>';
+          return nearest.map((g, i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:7px 0;${i<nearest.length-1?'border-bottom:1px solid var(--border)':''}">
+              <div style="width:32px;height:32px;background:#1a2e1a;border:1.5px solid ${TYPE_COLOR[g.type]};border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${TYPE_EMOJI[g.type]}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.name || TYPE_LABEL[g.type]}</div>
+                <div style="font-size:10px;color:${TYPE_COLOR[g.type]}">${TYPE_LABEL[g.type]}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:14px;font-weight:700;color:${i===0?TYPE_COLOR[g.type]:'var(--muted)'}">${g.dist<1?Math.round(g.dist*1000)+'m':g.dist.toFixed(1)+'km'}</div>
+                ${i===0?`<div style="font-size:9px;color:${TYPE_COLOR[g.type]};font-weight:600">nearest</div>`:''}
+              </div>
+            </div>`).join('');
+        })()}
+        <div style="font-size:10px;color:#546e7a;margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">📡 OS Open Greenspace · Crown copyright</div>
       </div>
       <!-- TRAIN STATIONS IN SCORE TAB -->
       <div class="score-section" style="border-bottom:none">
