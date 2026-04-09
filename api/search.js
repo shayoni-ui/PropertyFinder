@@ -5,9 +5,9 @@
 const IMD2025 = require('./imd2025.json');
 
 // ── EPC helpers ───────────────────────────────────────────────────────────────
-const EPC_AUTH = Buffer.from(
-  `${process.env.EPC_EMAIL || 'shayoni08@gmail.com'}:${process.env.EPC_KEY || '6d4a0050956a985b5a27f7a8251f7f02130a1db1'}`
-).toString('base64');
+const EPC_AUTH = process.env.EPC_EMAIL && process.env.EPC_KEY
+  ? Buffer.from(`${process.env.EPC_EMAIL}:${process.env.EPC_KEY}`).toString('base64')
+  : null;
 
 // Normalise address string for fuzzy matching
 function normAddr(s) {
@@ -198,7 +198,7 @@ module.exports = async function handler(req, res) {
     } catch { /* EPC will be skipped */ }
 
     const uniquePostcodes = [...new Set(Object.values(postcodeByIndex2))];
-    const epcMap = uniquePostcodes.length ? await fetchEPCByPostcodes(uniquePostcodes) : {};
+    const epcMap = (uniquePostcodes.length && EPC_AUTH) ? await fetchEPCByPostcodes(uniquePostcodes) : {};
 
     // ── Step 6: Assemble final property objects ──────────────────────────────
     const properties = rawProps.map((p, i) => {
