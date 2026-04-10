@@ -657,12 +657,13 @@ function calcScore(p) {
   const crimeLoaded = CRIME_DATA.has(crimeKey); // true once fetched (success OR fail)
   const crime = CRIME_DATA.get(crimeKey);       // null = fetched but failed/unavailable
   if (crime) {
-    // total = all crimes within ~1 mile radius over 1 month
-    if      (crime.total <= 10)  crimeScore = 20;
-    else if (crime.total <= 25)  crimeScore = 17;
-    else if (crime.total <= 45)  crimeScore = 14;
-    else if (crime.total <= 70)  crimeScore = 10;
-    else if (crime.total <= 110) crimeScore = 6;
+    // total = all crimes within ~1 mile square over 1 month (police.uk)
+    // Thresholds calibrated: quiet suburb ~50-80, average ~80-150, busy urban 150-300+
+    if      (crime.total <= 30)  crimeScore = 20;
+    else if (crime.total <= 80)  crimeScore = 17;
+    else if (crime.total <= 150) crimeScore = 14;
+    else if (crime.total <= 250) crimeScore = 10;
+    else if (crime.total <= 400) crimeScore = 6;
     else                          crimeScore = 2;
   }
 
@@ -905,11 +906,13 @@ const CRIME_CATS = {
 };
 
 function crimeRating(total) {
-  if (total <= 10)  return { label: 'Very Low',  color: '#43a047' };
-  if (total <= 25)  return { label: 'Low',       color: '#8bc34a' };
-  if (total <= 45)  return { label: 'Moderate',  color: '#ffc107' };
-  if (total <= 70)  return { label: 'Elevated',  color: '#ff9800' };
-  if (total <= 110) return { label: 'High',      color: '#f44336' };
+  // Thresholds calibrated for police.uk ~1-mile-square monthly counts:
+  // quiet suburb ~50-80, average suburb ~80-150, busy urban ~150-300, high-crime ~300+
+  if (total <= 30)  return { label: 'Very Low',  color: '#43a047' };
+  if (total <= 80)  return { label: 'Low',       color: '#8bc34a' };
+  if (total <= 150) return { label: 'Moderate',  color: '#ffc107' };
+  if (total <= 250) return { label: 'Elevated',  color: '#ff9800' };
+  if (total <= 400) return { label: 'High',      color: '#f44336' };
   return                    { label: 'Very High', color: '#b71c1c' };
 }
 
