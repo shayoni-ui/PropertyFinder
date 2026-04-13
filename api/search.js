@@ -18,7 +18,7 @@ function lookupBroadband(postcode) {
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
     const pos = mid * BB_REC;
-    const cmp = key.compare(BB_BIN, 0, 7, pos, pos + 7);
+    const cmp = key.compare(BB_BIN, pos, pos + 7, 0, 7);
     if (cmp === 0) return { sfbb: BB_BIN[pos+7], ufbb: BB_BIN[pos+8], giga: BB_BIN[pos+9] };
     if (cmp < 0) hi = mid - 1;
     else lo = mid + 1;
