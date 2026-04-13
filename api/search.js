@@ -1,8 +1,30 @@
-// Vercel serverless function — proxies Rightmove search + enriches with IMD 2025 + EPC data
+// Vercel serverless function — proxies Rightmove search + enriches with IMD 2025 + EPC + broadband
 // Route: GET /api/search?postcode=CV37+8FH&radius=1.0&minBeds=3&minPrice=0&maxPrice=500000
+
+const fs   = require('fs');
+const path = require('path');
 
 // IMD 2025 lookup: LSOA code (2021) → decile (1=most deprived, 10=least deprived)
 const IMD2025 = require('./imd2025.json');
+
+// Ofcom broadband coverage: sorted binary file — 10 bytes/record: 7-char postcode + sfbb + ufbb + giga
+const BB_BIN = fs.readFileSync(path.join(__dirname, 'broadband.bin'));
+const BB_REC = 10;
+
+function lookupBroadband(postcode) {
+  const pc = (postcode || '').replace(/\s+/g, '').toUpperCase().slice(0, 7).padEnd(7);
+  const key = Buffer.from(pc, 'ascii');
+  let lo = 0, hi = Math.floor(BB_BIN.length / BB_REC) - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const pos = mid * BB_REC;
+    const cmp = key.compare(BB_BIN, 0, 7, pos, pos + 7);
+    if (cmp === 0) return { sfbb: BB_BIN[pos+7], ufbb: BB_BIN[pos+8], giga: BB_BIN[pos+9] };
+    if (cmp < 0) hi = mid - 1;
+    else lo = mid + 1;
+  }
+  return null;
+}
 
 // ── EPC helpers ───────────────────────────────────────────────────────────────
 const EPC_AUTH = process.env.EPC_EMAIL && process.env.EPC_KEY
@@ -209,6 +231,9 @@ module.exports = async function handler(req, res) {
       // EPC certificate match
       const pc = postcodeByIndex2[i];
       const certs = pc ? (epcMap[pc] || []) : [];
+
+      // Ofcom broadband coverage
+      const bb = pc ? lookupBroadband(pc) : null;
       const cert = matchEPC(p.displayAddress, certs);
 
       // Floor area: EPC cert (m² → sqft) preferred; fall back to listing text
@@ -258,6 +283,9 @@ module.exports = async function handler(req, res) {
         image: p.propertyImages?.images?.[0]?.srcUrl ?? p.images?.[0]?.srcUrl ?? null,
         addedDate: p.firstVisibleDate ?? null,
         summary: summary.slice(0, 400),
+        bbSfbb: bb?.sfbb ?? null,   // % premises superfast ≥30 Mbps
+        bbUfbb: bb?.ufbb ?? null,   // % premises ultrafast ≥300 Mbps
+        bbGiga: bb?.giga ?? null,   // % premises gigabit-capable
         custom: false,
       };
     });

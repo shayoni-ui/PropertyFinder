@@ -1598,6 +1598,7 @@ function renderList(props) {
         <span class="tag" style="${p.parking==='garage'?'background:#2a1e0a;color:#ffb74d':p.parking==='driveway'?'background:#0a2020;color:#80cbc4':'background:#1a1e26;color:#90a4ae'}">${p.parking==='garage'?'🚗 Garage':p.parking==='driveway'?'🅿️ Driveway':'🛣️ On-road'}</span>
         <span class="tag" style="${p.epc==='A'||p.epc==='B'?'background:#0a2a0a;color:#66bb6a':p.epc==='C'?'background:#0a1e0a;color:#a5d6a7':'background:#1e1a0a;color:#fff176'}">⚡${p.epc}</span>
         ${p.sqft ? `<span class="tag tag-size">${formatSize(p.sqft)}</span>` : '<span class="tag tag-size-unknown">size not listed</span>'}
+        ${p.bbGiga != null ? `<span class="tag" style="${p.bbGiga>=90?'background:#0a1e2a;color:#4fc3f7':p.bbGiga>=50?'background:#0a1e2a;color:#81d4fa':p.bbSfbb>=90?'background:#0d1a0d;color:#a5d6a7':'background:#2a1a0a;color:#ffb74d'}">🌐 ${p.bbGiga>=90?'Gigabit':p.bbGiga>=50?'Part-Fibre':p.bbSfbb>=90?'Superfast':'Basic'}</span>` : ''}
       </div>
       <div class="prop-meta">
         <div class="imd-dot" style="background:${getIMDColor(p.imd)}"></div>
@@ -1738,6 +1739,44 @@ function selectProperty(id) {
           </div>
         </div>` : '<div style="margin-top:8px;font-size:10px;color:#546e7a;padding:6px 8px;background:var(--surface2);border-radius:6px">📋 No EPC certificate found — rating inferred from listing text</div>'}
       </div>
+      <!-- BROADBAND IN SCORE TAB -->
+      ${p.bbGiga != null ? `
+      <div class="score-section">
+        <h3>🌐 Broadband Coverage <span style="font-size:10px;color:var(--muted);font-weight:400">${p.postcode || ''}</span></h3>
+        ${(()=>{
+          const tier = p.bbGiga>=90?{label:'Gigabit-capable',sub:'Full fibre or cable gigabit available to most premises',color:'#4fc3f7',icon:'🟢'}
+                     : p.bbGiga>=50?{label:'Partial Gigabit',sub:'Gigabit available to some premises — check your specific property',color:'#81d4fa',icon:'🟡'}
+                     : p.bbSfbb>=90?{label:'Superfast',sub:'Good speeds available (≥30 Mbps) but no widespread gigabit yet',color:'#a5d6a7',icon:'🟡'}
+                     : p.bbSfbb>=50?{label:'Mixed coverage',sub:'Some premises have decent broadband — check before buying',color:'#ffb74d',icon:'🟠'}
+                     : {label:'Limited broadband',sub:'Many premises below superfast speeds — worth checking with ISPs',color:'#ef9a9a',icon:'🔴'};
+          return `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <div style="font-size:28px">${tier.icon}</div>
+              <div>
+                <div style="font-size:13px;font-weight:700;color:${tier.color}">${tier.label}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px">${tier.sub}</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px">
+              <div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center">
+                <div style="font-size:18px;font-weight:800;color:#4fc3f7">${p.bbGiga}%</div>
+                <div style="color:var(--muted);margin-top:2px">Gigabit</div>
+                <div style="font-size:9px;color:var(--muted)">≥1 Gbps</div>
+              </div>
+              <div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center">
+                <div style="font-size:18px;font-weight:800;color:#81d4fa">${p.bbUfbb}%</div>
+                <div style="color:var(--muted);margin-top:2px">Ultrafast</div>
+                <div style="font-size:9px;color:var(--muted)">≥300 Mbps</div>
+              </div>
+              <div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center">
+                <div style="font-size:18px;font-weight:800;color:#a5d6a7">${p.bbSfbb}%</div>
+                <div style="color:var(--muted);margin-top:2px">Superfast</div>
+                <div style="font-size:9px;color:var(--muted)">≥30 Mbps</div>
+              </div>
+            </div>
+            <div style="font-size:10px;color:#546e7a;margin-top:8px">📡 Ofcom Connected Nations 2025 · residential premises</div>`;
+        })()}
+      </div>` : ''}
       <!-- GREEN SPACES IN SCORE TAB -->
       <div class="score-section">
         <h3>🌳 Nearest Green Spaces</h3>
