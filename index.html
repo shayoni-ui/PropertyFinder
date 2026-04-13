@@ -2104,18 +2104,15 @@ function selectProperty(id) {
           </div>
         </div>
         ${(()=>{
-          const isRec  = p.status && p.status.includes('✅');
-          const isCaut = p.status && p.status.includes('⚠️');
-          const isAvoid= p.status && p.status.includes('❌');
-          const bg    = isRec ? 'rgba(102,187,106,0.15)' : isCaut ? 'rgba(255,183,77,0.15)' : 'rgba(239,154,154,0.15)';
-          const border= isRec ? '#66bb6a' : isCaut ? '#ffb74d' : '#ef9a9a';
-          const icon  = isRec ? '✅' : isCaut ? '⚠️' : '❌';
-          const label = isRec ? 'RECOMMENDED' : isCaut ? 'CONSIDER CAREFULLY' : 'AVOID';
-          const sub   = isRec
-            ? (p.score>=80 ? 'Strong buy — high score across all categories' : 'Good overall profile for this price point')
-            : isCaut
-            ? 'Some concerns — review scores below before deciding'
-            : 'Low area quality score — not recommended at this price';
+          const s = p.score;
+          const bg    = s>=60 ? 'rgba(102,187,106,0.15)' : s>=30 ? 'rgba(255,183,77,0.15)' : 'rgba(239,154,154,0.15)';
+          const border= s>=60 ? '#66bb6a' : s>=30 ? '#ffb74d' : '#ef9a9a';
+          const icon  = s>=60 ? '✅' : s>=30 ? '⚠️' : '❌';
+          const label = s>=60 ? 'RECOMMENDED' : s>=30 ? 'CONSIDER CAREFULLY' : 'AVOID';
+          const sub   = s>=80 ? 'Strong buy — high score across all categories'
+                      : s>=60 ? 'Good overall profile for this price point'
+                      : s>=30 ? 'Some concerns — review the scores below before deciding'
+                      : 'Low overall score — not recommended at this price';
           return `<div style="margin:12px 0 8px;padding:10px 14px;background:${bg};border-left:4px solid ${border};border-radius:0 8px 8px 0;display:flex;align-items:center;gap:12px">
             <div style="font-size:22px">${icon}</div>
             <div>
