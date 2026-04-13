@@ -980,7 +980,7 @@ function renderSchoolsTab(nearby, propLat, propLng, filter) {
     const n = t === 'all' ? nearby.length
             : t === 'independent' ? nearby.filter(s => s.funded === 'independent').length
             : nearby.filter(s => s.type === t).length;
-    return `<button class="school-filter-tab ${filter===t?'active':''}" onclick="switchSchoolFilter('${t}',${propLat},${propLng})">${labels[t]} (${n})</button>`;
+    return `<button class="school-filter-tab ${filter===t?'active':''}" onclick="switchSchoolFilter('${t}')">${labels[t]} (${n})</button>`;
   }).join('');
   const filterBar = `<div class="school-filter-tabs">${tabs}</div>`;
 
@@ -1063,21 +1063,60 @@ function renderSchoolsTab(nearby, propLat, propLng, filter) {
     ${cardsHtml}`;
 }
 
-// Called by filter tab buttons inside the schools tab
-// propLat/propLng kept as params for backward-compat but we always re-lookup from PROPERTIES
-function switchSchoolFilter(filter, propLat, propLng) {
+// Populate schools tab — called after panel renders and after schools JSON loads
+function populateSchoolsTab(lat, lng) {
+  const el = document.getElementById('tab-schools-body');
+  if (!el) return;
+  try {
+    const nearby = getNearbySchools(lat, lng, 2.5);
+    el.innerHTML = renderSchoolsTab(nearby, lat, lng, 'all');
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">⚠️ Could not load school data.</div>';
+    console.error('populateSchoolsTab:', e);
+  }
+}
+
+// Called by filter buttons rendered inside renderSchoolsTab
+function switchSchoolFilter(filter) {
   if (!selectedId) return;
   const p = PROPERTIES.find(x => x.id === selectedId);
   if (!p) return;
-  const nearby = getNearbySchools(p.lat, p.lng, 2.5);
-  const section = document.querySelector('#tab-schools .schools-section');
-  if (!section) return;
+  const el = document.getElementById('tab-schools-body');
+  if (!el) return;
   try {
-    section.innerHTML = renderSchoolsTab(nearby, p.lat, p.lng, filter);
+    el.innerHTML = renderSchoolsTab(getNearbySchools(p.lat, p.lng, 2.5), p.lat, p.lng, filter);
   } catch(e) {
-    section.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:10px 0">⚠️ Could not render schools: ${e.message}</div>`;
-    console.error('switchSchoolFilter error:', e);
+    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">⚠️ Could not load school data.</div>';
+    console.error('switchSchoolFilter:', e);
   }
+}
+
+// Populate shops tab — called after panel renders and after Overpass fetch completes
+function populateShopsTab(lat, lng) {
+  const el = document.getElementById('tab-shops-body');
+  if (!el) return;
+  const shops = SUPERMARKETS.length ? getNearestShops(lat, lng).slice(0, 8) : [];
+  if (!shops.length) {
+    el.innerHTML = `<h3>🛒 Nearest Supermarkets</h3>
+      <div style="color:var(--muted);font-size:12px;padding:10px 0">
+        No shop data yet.
+        <button onclick="retryShops()" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:6px">🔄 Load shops</button>
+      </div>`;
+    return;
+  }
+  const tierLabel = t => t === 'premium' ? '⭐ Premium' : t === 'mid' ? '✅ Mid-range' : '💰 Discount';
+  el.innerHTML = '<h3>🛒 Nearest Supermarkets</h3>' + shops.map((s, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < shops.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
+      <div style="width:36px;height:36px;background:white;border:2px solid ${s.color};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${s.emoji}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${s.name}</div>
+        <div style="font-size:11px;color:var(--muted)">${tierLabel(s.tier)}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:14px;font-weight:700;color:${i===0?s.color:'var(--muted)'}">${s.dist < 1 ? Math.round(s.dist*1000)+'m' : s.dist.toFixed(1)+'km'}</div>
+        ${i===0 ? '<div style="font-size:9px;color:var(--accent)">nearest</div>' : ''}
+      </div>
+    </div>`).join('');
 }
 
 // ============================================================
@@ -1395,7 +1434,7 @@ function initMap() {
       // If a property detail panel is already open, refresh its schools tab
       if (selectedId) {
         const op = PROPERTIES.find(x => x.id === selectedId);
-        if (op) switchSchoolFilter('all', op.lat, op.lng);
+        if (op) populateSchoolsTab(op.lat, op.lng);
       }
     })
     .catch(() => console.warn('Schools data unavailable'));
@@ -1525,37 +1564,17 @@ async function fetchSupermarkets(props) {
       .filter(Boolean);
 
     renderShops();
-    refreshShopsTab();
+    if (selectedId) { const op = PROPERTIES.find(x => x.id === selectedId); if (op) populateShopsTab(op.lat, op.lng); }
   } catch (e) {
     console.warn('Supermarket fetch failed:', e.message);
-    refreshShopsTabError(e.message);
+    if (selectedId) { const op = PROPERTIES.find(x => x.id === selectedId); if (op) populateShopsTab(op.lat, op.lng); }
   }
-}
-
-// Called when fetch succeeds but panel already open — re-render shops list
-// Called when fetch fails — show retry button in open panel
-function refreshShopsTabError(msg) {
-  const tab = document.getElementById('tab-shops');
-  if (!tab) return;
-  const section = tab.querySelector('.schools-section');
-  if (!section) return;
-  section.innerHTML = `
-    <h3>🛒 Nearest Supermarkets</h3>
-    <div style="color:var(--muted);font-size:12px;padding:10px 0">
-      ⚠️ Couldn't load shop data (${msg || 'unknown error'}).
-      <br><br>
-      <button onclick="retryShops()" style="margin-top:6px;background:var(--accent);color:white;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">🔄 Retry</button>
-    </div>`;
 }
 
 function retryShops() {
   if (!PROPERTIES.length) return;
-  // Reset SUPERMARKETS so the tab shows loading state
-  const tab = document.getElementById('tab-shops');
-  if (tab) {
-    const section = tab.querySelector('.schools-section');
-    if (section) section.innerHTML = '<h3>🛒 Nearest Supermarkets</h3><div style="color:var(--muted);font-size:12px;padding:10px 0">⏳ Loading shops…</div>';
-  }
+  const el = document.getElementById('tab-shops-body');
+  if (el) el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">⏳ Loading shops…</div>';
   fetchSupermarkets(PROPERTIES.filter(p => p.lat && p.lng));
 }
 
@@ -1578,40 +1597,6 @@ function renderShops() {
 
 function toggleShops() {
   renderShops();
-}
-
-function refreshShopsTab() {
-  // Re-render the shops tab in the currently open detail panel
-  if (!selectedId) return;
-  const tab = document.getElementById('tab-shops');
-  if (!tab) return;
-  const p = PROPERTIES.find(x => x.id === selectedId);
-  if (!p) return;
-
-  const shops = getNearestShops(p.lat, p.lng).slice(0, 8);
-  const section = tab.querySelector('.schools-section');
-  if (!section) return;
-
-  const tierLabel = t => t === 'premium' ? '⭐ Premium' : t === 'mid' ? '✅ Mid-range' : '💰 Discount';
-  let inner = '<h3>🛒 Nearest Supermarkets</h3>';
-  if (!shops.length) {
-    inner += '<div style="color:var(--muted);font-size:12px;padding:10px 0">No supermarket data found nearby.</div>';
-  } else {
-    inner += shops.map((s, i) => `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < shops.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
-        <div style="width:36px;height:36px;background:white;border:2px solid ${s.color};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${s.emoji}</div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">${s.name}</div>
-          <div style="font-size:11px;color:var(--muted)">${tierLabel(s.tier)}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:14px;font-weight:700;color:${i===0?s.color:'var(--muted)'}">${s.dist < 1 ? Math.round(s.dist*1000)+'m' : s.dist.toFixed(1)+'km'}</div>
-          ${i===0 ? '<div style="font-size:9px;color:var(--accent)">nearest</div>' : ''}
-        </div>
-      </div>
-    `).join('');
-  }
-  section.innerHTML = inner;
 }
 
 function getNearestShops(lat, lng) {
@@ -2270,35 +2255,17 @@ function selectProperty(id) {
       </div>
     </div>
 
-    <!-- SCHOOLS TAB -->
+    <!-- SCHOOLS TAB — populated by populateSchoolsTab() after render -->
     <div id="tab-schools" class="tab-content">
-      <div class="schools-section" id="schools-section-${p.id}">
-        ${(() => { try { return renderSchoolsTab(nearby, p.lat, p.lng, 'all'); } catch(e) { return `<div style='color:var(--muted);font-size:12px;padding:10px 0'>Schools loading… <button onclick="switchSchoolFilter('all',${p.lat},${p.lng})" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:6px">🔄 Load</button></div>`; } })()}
+      <div class="schools-section" id="tab-schools-body">
+        <div style="color:var(--muted);font-size:12px;padding:10px 0">⏳ Loading schools…</div>
       </div>
     </div>
 
-    <!-- SHOPS TAB -->
+    <!-- SHOPS TAB — populated by populateShopsTab() after render -->
     <div id="tab-shops" class="tab-content">
-      <div class="schools-section">
-        <h3>🛒 Nearest Supermarkets</h3>
-        ${(() => {
-          const shops = getNearestShops(p.lat, p.lng).slice(0, 8);
-          if (!shops.length) return '<div style="color:var(--muted);font-size:12px;padding:10px 0">No shop data yet. <button onclick="retryShops()" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:6px">🔄 Load shops</button></div>';
-          const tierLabel = t => t === 'premium' ? '⭐ Premium' : t === 'mid' ? '✅ Mid-range' : '💰 Discount';
-          return shops.map((s, i) => `
-            <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < shops.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
-              <div style="width:36px;height:36px;background:white;border:2px solid ${s.color};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${s.emoji}</div>
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:600;color:var(--text)">${s.name}</div>
-                <div style="font-size:11px;color:var(--muted)">${tierLabel(s.tier)}</div>
-              </div>
-              <div style="text-align:right;flex-shrink:0">
-                <div style="font-size:14px;font-weight:700;color:${i===0?s.color:'var(--muted)'}">${s.dist < 1 ? Math.round(s.dist*1000)+'m' : s.dist.toFixed(1)+'km'}</div>
-                ${i===0 ? '<div style="font-size:9px;color:var(--accent)">nearest</div>' : ''}
-              </div>
-            </div>
-          `).join('');
-        })()}
+      <div class="schools-section" id="tab-shops-body">
+        <div style="color:var(--muted);font-size:12px;padding:10px 0">⏳ Loading shops…</div>
       </div>
     </div>
 
@@ -2349,6 +2316,10 @@ function selectProperty(id) {
   `;
   // Default to score tab
   switchTab(document.querySelector('.detail-tab'), 'tab-score');
+
+  // Populate schools + shops tabs (decoupled from template so no crash risk)
+  populateSchoolsTab(p.lat, p.lng);
+  populateShopsTab(p.lat, p.lng);
 
   // Async: load sold prices in background so tab is ready when clicked
   fetchSoldPrices(p.postcode);
