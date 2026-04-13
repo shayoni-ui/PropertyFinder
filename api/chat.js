@@ -1,8 +1,14 @@
 // api/chat.js — DeepSeek proxy (keeps API key server-side)
 // Vercel serverless function: POST /api/chat
-// Body: { messages: [...], persona: { type, priorities, commute } }
+// Body: { messages: [{role, content}, ...] }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
+  // CORS headers for preview deployments
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -14,7 +20,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured on server' });
+    return res.status(500).json({ error: 'DEEPSEEK_API_KEY not set on server' });
   }
 
   try {
@@ -32,14 +38,12 @@ export default async function handler(req, res) {
       }),
     });
 
+    const text = await upstream.text();
     if (!upstream.ok) {
-      const err = await upstream.text();
-      return res.status(upstream.status).json({ error: err });
+      return res.status(upstream.status).json({ error: text });
     }
-
-    const data = await upstream.json();
-    return res.status(200).json(data);
+    return res.status(200).json(JSON.parse(text));
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
-}
+};
