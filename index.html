@@ -830,7 +830,7 @@ let PERSONA = {
   hasKids: null,
   priorities: [],   // e.g. ['school','crime','transport']
   commute: null,
-  apiKey: 'sk-20535fc3c0d646c19e108f169c9d0e5b', // DeepSeek API key
+  apiKey: null, // key lives server-side in DEEPSEEK_API_KEY env var; calls go through /api/chat
   weights: { imd: 1, school: 1, crime: 1, feat: 1 }
 };
 
@@ -1119,10 +1119,10 @@ function policeMonths() {
 }
 
 // Fetch with a manual timeout compatible with all browsers
-function fetchWithTimeout(url, ms) {
+function fetchWithTimeout(url, ms, opts) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('timeout')), ms);
-    fetch(url).then(r => { clearTimeout(timer); resolve(r); }, e => { clearTimeout(timer); reject(e); });
+    fetch(url, opts).then(r => { clearTimeout(timer); resolve(r); }, e => { clearTimeout(timer); reject(e); });
   });
 }
 
@@ -1308,14 +1308,17 @@ const SHOP_BRANDS = {
   waitrose: { tier:'premium', color:'#1565c0', emoji:'🛍️' },
   "marks & spencer": { tier:'premium', color:'#1565c0', emoji:'🛍️' },
   "m&s food": { tier:'premium', color:'#1565c0', emoji:'🛍️' },
+  "m&s simply food": { tier:'premium', color:'#1565c0', emoji:'🛍️' },
+  marks: { tier:'premium', color:'#1565c0', emoji:'🛍️' },
   "whole foods": { tier:'premium', color:'#1565c0', emoji:'🛍️' },
   "sainsbury's": { tier:'mid', color:'#e65100', emoji:'🧡' },
   sainsburys: { tier:'mid', color:'#e65100', emoji:'🧡' },
+  sainsbury: { tier:'mid', color:'#e65100', emoji:'🧡' },
   tesco: { tier:'mid', color:'#1b5e20', emoji:'💙' },
   asda: { tier:'mid', color:'#558b2f', emoji:'💚' },
   morrisons: { tier:'mid', color:'#f9a825', emoji:'💛' },
   "co-op": { tier:'mid', color:'#00838f', emoji:'🩵' },
-  "co-op food": { tier:'mid', color:'#00838f', emoji:'🩵' },
+  "co-operative": { tier:'mid', color:'#00838f', emoji:'🩵' }, // OSM uses full name
   coop: { tier:'mid', color:'#00838f', emoji:'🩵' },
   lidl: { tier:'discount', color:'#6a1a9a', emoji:'💜' },
   aldi: { tier:'discount', color:'#e53935', emoji:'❤️' },
@@ -1338,8 +1341,10 @@ async function fetchSupermarkets(props) {
   const s = Math.min(...lats) - pad, n = Math.max(...lats) + pad;
   const w = Math.min(...lngs) - pad, e = Math.max(...lngs) + pad;
 
-  const brandFilter = 'Waitrose|Sainsbury|Tesco|Asda|Morrisons|Lidl|Aldi|Iceland|Co-op|Marks';
-  const q = `[out:json][timeout:25];(node["shop"="supermarket"]["brand"~"${brandFilter}",i](${s},${w},${n},${e});way["shop"="supermarket"]["brand"~"${brandFilter}",i](${s},${w},${n},${e}););out center 100;`;
+  // Query by name (not brand) — brand filter causes Overpass timeout due to index cost
+  // Co-operative = Co-op, M&S Food = Marks, Little Waitrose = Waitrose
+  const nameFilter = 'Waitrose|Sainsbury|Tesco|Asda|Morrisons|Lidl|Aldi|Iceland|Co-op|Co-operative|Marks|M&S';
+  const q = `[out:json][timeout:25];(node["shop"="supermarket"]["name"~"${nameFilter}",i](${s},${w},${n},${e});way["shop"="supermarket"]["name"~"${nameFilter}",i](${s},${w},${n},${e});node["shop"="convenience"]["name"~"${nameFilter}",i](${s},${w},${n},${e});way["shop"="convenience"]["name"~"${nameFilter}",i](${s},${w},${n},${e}););out center 100;`;
   const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q);
 
   try {
@@ -2839,20 +2844,15 @@ async function askDeepSeek(userMsg) {
   const typingEl = chatShowTyping();
 
   try {
-    const resp = await fetch('https://api.deepseek.com/chat/completions', {
+    // Call our server-side proxy — keeps the API key out of client JS
+    const resp = await fetchWithTimeout('/api/chat', 20000, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PERSONA.apiKey}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'deepseek-chat',
         messages: [
           { role: 'system', content: buildSystemPrompt() },
-          ...CHAT_HISTORY.slice(-8) // keep last 4 exchanges for context
-        ],
-        max_tokens: 220,
-        temperature: 0.75
+          ...CHAT_HISTORY.slice(-8)
+        ]
       })
     });
 
@@ -2873,7 +2873,7 @@ async function askDeepSeek(userMsg) {
     const msgs = document.getElementById('chat-msgs');
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble chat-bubble-bot';
-    bubble.textContent = `⚠️ Couldn't reach DeepSeek right now (${e.message}). Try again in a moment.`;
+    bubble.textContent = `⚠️ Couldn't reach the AI right now (${e.message}). Try again in a moment.`;
     msgs.appendChild(bubble);
     msgs.scrollTop = msgs.scrollHeight;
   }
