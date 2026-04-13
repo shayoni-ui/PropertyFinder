@@ -228,6 +228,26 @@
 
   @media (max-width: 767px) {
 
+    /* Peek bar — compact property card pinned above nav bar */
+    .mob-peek-bar {
+      position: fixed;
+      left: 10px; right: 10px;
+      bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+      height: 64px;
+      background: var(--surface);
+      border: 1.5px solid var(--accent);
+      border-radius: 14px;
+      z-index: 925;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      gap: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.55);
+      transition: transform 0.18s ease, opacity 0.18s ease;
+    }
+    .mob-peek-bar.hidden { display: none; }
+
     /* Filter panel: drop down as absolute overlay so it never competes with prop-list height */
     .filter-panel {
       position: absolute;
@@ -608,7 +628,7 @@
 
   <!-- DETAIL PANEL -->
   <div class="detail-panel hidden" id="detail-panel">
-    <div class="sheet-handle" id="detail-handle" onclick="closeDetail()"></div>
+    <div class="sheet-handle" id="detail-handle" onclick="isMobile()?minimizeDetail():closeDetail()"></div>
     <div class="detail-inner" id="detail-inner">
       <!-- filled by JS -->
     </div>
@@ -617,6 +637,9 @@
 
 <!-- MOBILE BACKDROP -->
 <div class="mob-backdrop" id="mob-backdrop" onclick="closeMobileSheets()"></div>
+
+<!-- MOBILE PEEK BAR — compact property summary, tap to expand -->
+<div id="mob-peek-bar" class="mob-peek-bar hidden" onclick="expandDetail()"></div>
 
 <!-- MOBILE BOTTOM NAV -->
 <div class="mobile-bottom-bar">
@@ -1889,12 +1912,15 @@ function selectProperty(id) {
   // Async: load sold prices in background so tab is ready when clicked
   fetchSoldPrices(p.postcode);
 
-  // On mobile: close sidebar, show detail sheet
+  // On mobile: close sidebar, show peek bar (user taps ⬆ to expand full sheet)
   if (isMobile()) {
     document.getElementById('sidebar').classList.remove('mob-open');
-    document.getElementById('mob-backdrop').classList.add('show');
+    document.getElementById('mob-backdrop').classList.remove('show');
     document.getElementById('mob-map-btn').classList.remove('active');
     document.getElementById('mob-filter-btn').classList.remove('active');
+    // Keep detail panel hidden — show compact peek bar instead
+    document.getElementById('detail-panel').classList.add('hidden');
+    showPeekBar(p);
   }
 }
 
@@ -1910,8 +1936,45 @@ function closeDetail() {
   document.getElementById('detail-panel').classList.add('hidden');
   selectedId = null;
   document.querySelectorAll('.prop-card').forEach(c => c.classList.remove('selected'));
-  // On mobile, close backdrop too
   document.getElementById('mob-backdrop').classList.remove('show');
+  hidePeekBar();
+}
+
+function minimizeDetail() {
+  // Collapse full detail sheet back to peek bar on mobile
+  document.getElementById('detail-panel').classList.add('hidden');
+  document.getElementById('mob-backdrop').classList.remove('show');
+  const p = PROPERTIES.find(x => x.id === selectedId);
+  if (p) showPeekBar(p);
+}
+
+function expandDetail() {
+  // Expand peek bar to full detail sheet
+  hidePeekBar();
+  const panel = document.getElementById('detail-panel');
+  panel.classList.remove('hidden');
+  document.getElementById('mob-backdrop').classList.add('show');
+}
+
+function showPeekBar(p) {
+  const bar = document.getElementById('mob-peek-bar');
+  if (!bar) return;
+  const sc = getScoreColor(p.score);
+  bar.innerHTML = `
+    <div style="width:44px;height:44px;border-radius:10px;background:${sc}22;border:2px solid ${sc};display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:${sc};flex-shrink:0">${p.score}</div>
+    <div style="flex:1;min-width:0;overflow:hidden">
+      <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.address}</div>
+      <div style="font-size:11px;color:var(--accent);margin-top:2px">£${p.price.toLocaleString()} · ${p.beds}bd ${p.ptype}</div>
+    </div>
+    <div style="color:var(--accent);font-size:22px;flex-shrink:0;line-height:1;margin-right:2px">⬆</div>
+    <button onclick="event.stopPropagation();closeDetail()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>
+  `;
+  bar.classList.remove('hidden');
+}
+
+function hidePeekBar() {
+  const bar = document.getElementById('mob-peek-bar');
+  if (bar) bar.classList.add('hidden');
 }
 
 // ============================================================
@@ -2012,6 +2075,7 @@ function closeMobileSheets() {
   document.getElementById('mob-map-btn').classList.add('active');
   document.getElementById('mob-filter-btn').classList.remove('active');
   document.getElementById('mob-list-btn').classList.remove('active');
+  hidePeekBar();
   selectedId = null;
   document.querySelectorAll('.prop-card').forEach(c => c.classList.remove('selected'));
 }
