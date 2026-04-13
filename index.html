@@ -156,6 +156,24 @@
   .ofsted-ri { background: rgba(251,140,0,0.2); color: #ffb74d; border: 1px solid #fb8c00; }
   .ofsted-inadequate { background: rgba(198,40,40,0.2); color: #ef9a9a; border: 1px solid #c62828; }
 
+  /* SCHOOL ENRICHMENT */
+  .school-summary-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .school-summary-pill { padding:3px 9px; border-radius:10px; font-size:10px; font-weight:700; display:flex; align-items:center; gap:4px; }
+  .school-filter-tabs { display:flex; gap:4px; margin-bottom:10px; }
+  .school-filter-tab { padding:4px 10px; border-radius:14px; font-size:11px; font-weight:600; cursor:pointer; border:1px solid var(--border); color:var(--muted); background:var(--surface2); transition:all 0.14s; }
+  .school-filter-tab.active { background:var(--accent); color:white; border-color:var(--accent); }
+  .school-card { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:7px; }
+  .school-card-header { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:5px; }
+  .school-card-name { font-size:13px; font-weight:700; color:var(--text); line-height:1.3; }
+  .school-card-meta { display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin-bottom:7px; }
+  .school-meta-tag { font-size:10px; color:var(--muted); background:rgba(255,255,255,0.05); border-radius:4px; padding:1px 6px; }
+  .school-card-footer { display:flex; justify-content:space-between; align-items:center; }
+  .school-distance { font-size:11px; color:var(--muted); display:flex; align-items:center; gap:4px; }
+  .school-actions { display:flex; gap:5px; }
+  .school-action-btn { font-size:10px; font-weight:600; padding:3px 8px; border-radius:5px; border:1px solid var(--border); background:var(--surface); color:var(--muted); cursor:pointer; text-decoration:none; display:inline-block; transition:all 0.14s; }
+  .school-action-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .school-section-label { font-size:10px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; margin:10px 0 6px; }
+
   /* DEPRIVATION SECTION */
   .depriv-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
   .depriv-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 10px; }
@@ -931,6 +949,128 @@ function getNearbySchools(lat, lng, radiusKm) {
     .map(s => ({...s, dist: haversine(lat, lng, s.lat, s.lng)}))
     .filter(s => s.dist <= radiusKm)
     .sort((a,b) => a.dist - b.dist);
+}
+
+// Build the full enriched schools tab HTML (also called by filter buttons)
+function renderSchoolsTab(nearby, propLat, propLng, filter) {
+  if (!nearby.length) return '<div style="color:var(--muted);font-size:12px;padding:10px 0">No schools data within 2.5km</div>';
+
+  // ── Summary counts ──
+  const rated = nearby.filter(s => s.ofsted);
+  const counts = { Outstanding:0, Good:0, 'Requires Improvement':0, Inadequate:0 };
+  rated.forEach(s => { if (counts[s.ofsted] !== undefined) counts[s.ofsted]++; });
+  const pillCfg = [
+    { key:'Outstanding',          color:'#64b5f6', bg:'rgba(21,101,192,0.2)',   label:'Outstanding' },
+    { key:'Good',                 color:'#81c784', bg:'rgba(67,160,71,0.2)',    label:'Good' },
+    { key:'Requires Improvement', color:'#ffb74d', bg:'rgba(251,140,0,0.2)',    label:'Needs Improvement' },
+    { key:'Inadequate',           color:'#ef9a9a', bg:'rgba(198,40,40,0.2)',    label:'Inadequate' },
+  ];
+  const summaryBar = `<div class="school-summary-bar">
+    ${pillCfg.filter(c => counts[c.key] > 0).map(c =>
+      `<span class="school-summary-pill" style="background:${c.bg};color:${c.color};border:1px solid ${c.color}55">
+        ${counts[c.key]} ${c.label}
+      </span>`).join('')}
+    ${!rated.length ? '<span style="color:var(--muted);font-size:11px">No Ofsted data nearby</span>' : ''}
+  </div>`;
+
+  // ── Filter tabs ──
+  const sectionId = `schools-section-filt`;
+  const tabs = ['all','primary','secondary','independent'].map(t => {
+    const labels = { all:'All', primary:'Primary', secondary:'Secondary', independent:'Independent' };
+    const n = t === 'all' ? nearby.length
+            : t === 'independent' ? nearby.filter(s => s.funded === 'independent').length
+            : nearby.filter(s => s.type === t).length;
+    return `<button class="school-filter-tab ${filter===t?'active':''}" onclick="switchSchoolFilter('${t}',${propLat},${propLng})">${labels[t]} (${n})</button>`;
+  }).join('');
+  const filterBar = `<div class="school-filter-tabs">${tabs}</div>`;
+
+  // ── Filter list ──
+  let filtered = nearby;
+  if (filter === 'primary')     filtered = nearby.filter(s => s.type === 'primary');
+  if (filter === 'secondary')   filtered = nearby.filter(s => s.type === 'secondary');
+  if (filter === 'independent') filtered = nearby.filter(s => s.funded === 'independent');
+  if (!filtered.length) return summaryBar + filterBar + '<div style="color:var(--muted);font-size:12px;padding:8px 0">No schools match this filter.</div>';
+
+  // ── School card renderer ──
+  const ofstedClass = o => ({ Outstanding:'ofsted-outstanding', Good:'ofsted-good', 'Requires Improvement':'ofsted-ri', Inadequate:'ofsted-inadequate' }[o] || '');
+  const ageRange = s => s.type === 'primary' ? 'Ages 4–11' : 'Ages 11–18';
+  const walkMin  = d => Math.round(d / 5 * 60);  // 5 km/h
+  const driveMin = d => Math.max(1, Math.round(d / 20 * 60)); // 20 km/h urban
+
+  const ofstedColors = { Outstanding:'#1565c0', Good:'#43a047', 'Requires Improvement':'#fb8c00', Inadequate:'#c62828' };
+
+  const renderCard = s => {
+    const walkT = walkMin(s.dist);
+    const driveT = driveMin(s.dist);
+    const distStr = s.dist < 1 ? `${Math.round(s.dist*1000)}m` : `${s.dist.toFixed(1)}km`;
+    const typeIcon = s.type === 'secondary' ? '🎓' : '🏫';
+    const fundedLabel = s.funded === 'independent' ? '🔑 Independent' : '🏛 State';
+    const dirUrl = `https://www.google.com/maps/dir/?api=1&origin=${propLat},${propLng}&destination=${s.lat},${s.lng}&travelmode=walking`;
+    const ofstedUrl = `https://reports.ofsted.gov.uk/provider?postCode=&providerName=${encodeURIComponent(s.name)}`;
+    const giasUrl = `https://get-information-schools.service.gov.uk/Establishments/Search?searchtype=text&search=${encodeURIComponent(s.name)}`;
+    const borderColor = s.ofsted ? (ofstedColors[s.ofsted] || 'var(--border)') : 'var(--border)';
+    return `
+      <div class="school-card" style="border-left:3px solid ${borderColor}">
+        <div class="school-card-header">
+          <div style="display:flex;gap:8px;align-items:flex-start;flex:1">
+            <span style="font-size:18px;flex-shrink:0">${typeIcon}</span>
+            <div class="school-card-name">${s.name}</div>
+          </div>
+          ${s.ofsted ? `<span class="ofsted-badge ${ofstedClass(s.ofsted)}" style="flex-shrink:0">${s.ofsted}</span>` : '<span style="color:#546e7a;font-size:10px;flex-shrink:0">Unrated</span>'}
+        </div>
+        <div class="school-card-meta">
+          <span class="school-meta-tag">${s.phase} · ${ageRange(s)}</span>
+          <span class="school-meta-tag">${fundedLabel}</span>
+        </div>
+        <div class="school-card-footer">
+          <div class="school-distance">
+            📍 ${distStr}
+            <span style="color:var(--border)">·</span>
+            🚶 ${walkT} min
+            <span style="color:var(--border)">·</span>
+            🚗 ${driveT} min
+          </div>
+          <div class="school-actions">
+            <a class="school-action-btn" href="${dirUrl}" target="_blank" rel="noopener">Directions ↗</a>
+            <a class="school-action-btn" href="${ofstedUrl}" target="_blank" rel="noopener">Ofsted ↗</a>
+            <a class="school-action-btn" href="${giasUrl}" target="_blank" rel="noopener">Info ↗</a>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  // ── Section grouping (when 'all' filter) ──
+  let cardsHtml = '';
+  if (filter === 'all') {
+    const state = filtered.filter(s => s.funded !== 'independent');
+    const indie = filtered.filter(s => s.funded === 'independent');
+    if (state.length) {
+      cardsHtml += `<div class="school-section-label" style="color:#60a5fa">🏛 State & Academy (${state.length})</div>`;
+      cardsHtml += state.map(renderCard).join('');
+    }
+    if (indie.length) {
+      cardsHtml += `<div class="school-section-label" style="color:#f59e0b">🔑 Independent (${indie.length})</div>`;
+      cardsHtml += indie.map(renderCard).join('');
+    }
+  } else {
+    cardsHtml = filtered.map(renderCard).join('');
+  }
+
+  return `
+    <h3>🏫 Schools within 2.5km</h3>
+    ${summaryBar}
+    ${filterBar}
+    ${cardsHtml}`;
+}
+
+// Called by filter tab buttons inside the schools tab
+function switchSchoolFilter(filter, propLat, propLng) {
+  if (!selectedId) return;
+  const p = PROPERTIES.find(x => x.id === selectedId);
+  if (!p) return;
+  const nearby = getNearbySchools(p.lat, p.lng, 2.5);
+  const section = document.querySelector('#tab-schools .schools-section');
+  if (section) section.innerHTML = renderSchoolsTab(nearby, propLat, propLng, filter);
 }
 
 // ============================================================
@@ -1873,7 +2013,7 @@ function selectProperty(id) {
   // Render detail panel
   const panel = document.getElementById('detail-panel');
   panel.classList.remove('hidden');
-  const nearby = getNearbySchools(p.lat, p.lng, 2.5).slice(0, 6);
+  const nearby = getNearbySchools(p.lat, p.lng, 2.5);
   const scoreCol = getScoreColor(p.score);
   const imdColor = getIMDColor(p.imd);
   const decilePct = ((p.imd-1)/9*100).toFixed(0);
@@ -2082,35 +2222,8 @@ function selectProperty(id) {
 
     <!-- SCHOOLS TAB -->
     <div id="tab-schools" class="tab-content">
-      <div class="schools-section">
-        <h3>Nearby Schools (within 2.5km)</h3>
-        ${(() => {
-          if (!nearby.length) return '<div style="color:var(--muted);font-size:12px;padding:10px 0">No schools data within 2.5km</div>';
-          const stateSchools = nearby.filter(s => s.funded !== 'independent');
-          const indSchools   = nearby.filter(s => s.funded === 'independent');
-          const renderItem = s => `
-            <div class="school-item">
-              <div class="school-icon ${s.type==='secondary'?'school-secondary-icon':'school-primary-icon'}">${s.type==='secondary'?'🎓':'🏫'}</div>
-              <div class="school-info">
-                <div class="school-name">${s.name}</div>
-                <div class="school-meta">
-                  ${s.ofsted ? `<span class="ofsted-badge ofsted-${s.ofsted.replace(/ /g,'-').toLowerCase()}">${s.ofsted}</span>` : '<span style="color:#546e7a;font-size:10px">No rating</span>'}
-                  <span>${s.phase}</span>
-                  <span>${s.dist.toFixed(1)}km</span>
-                </div>
-              </div>
-            </div>`;
-          let html = '';
-          if (stateSchools.length) {
-            html += `<div style="font-size:10px;color:#60a5fa;font-weight:700;letter-spacing:0.5px;margin:8px 0 4px;text-transform:uppercase">🏛 State / Academy (${stateSchools.length})</div>`;
-            html += stateSchools.map(renderItem).join('');
-          }
-          if (indSchools.length) {
-            html += `<div style="font-size:10px;color:#f59e0b;font-weight:700;letter-spacing:0.5px;margin:12px 0 4px;text-transform:uppercase">🔑 Independent (${indSchools.length})</div>`;
-            html += indSchools.map(renderItem).join('');
-          }
-          return html;
-        })()}
+      <div class="schools-section" id="schools-section-${p.id}">
+        ${renderSchoolsTab(nearby, p.lat, p.lng, 'all')}
       </div>
     </div>
 
