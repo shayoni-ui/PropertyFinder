@@ -377,6 +377,152 @@
 .fcheck:hover { color:var(--text); }
 .fcheck input { accent-color:var(--accent);width:13px;height:13px; }
 @media(max-width:480px) { .form-row2,.form-row3 { grid-template-columns:1fr; } }
+
+/* ============================================================
+   PERSONA CHATBOT WIDGET
+   ============================================================ */
+.chat-fab {
+  position: fixed; bottom: 22px; right: 20px;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: linear-gradient(135deg, #5c6bc0, #7c4dff);
+  color: white; font-size: 22px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 1100;
+  box-shadow: 0 4px 20px rgba(92,107,192,0.55);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  border: none;
+}
+.chat-fab:hover { transform: scale(1.08); box-shadow: 0 6px 26px rgba(92,107,192,0.7); }
+.chat-fab .chat-fab-dot {
+  position: absolute; top: 3px; right: 3px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #ff5252; border: 2px solid var(--bg);
+  display: none;
+}
+.chat-fab .chat-fab-dot.show { display: block; }
+
+.chat-panel {
+  position: fixed; bottom: 84px; right: 20px;
+  width: 320px;
+  max-height: 480px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  display: flex; flex-direction: column;
+  z-index: 1099;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+  transform: scale(0.92) translateY(12px);
+  opacity: 0; pointer-events: none;
+  transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1), opacity 0.18s ease;
+}
+.chat-panel.open {
+  transform: scale(1) translateY(0);
+  opacity: 1; pointer-events: all;
+}
+
+.chat-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.chat-header-icon {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: linear-gradient(135deg,#5c6bc0,#7c4dff);
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.chat-header-title { flex: 1; }
+.chat-header-title strong { font-size: 13px; color: var(--text); display: block; }
+.chat-header-title span { font-size: 11px; color: #43a047; }
+.chat-close-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 2px 6px; border-radius: 4px; }
+.chat-close-btn:hover { color: var(--text); background: var(--surface2); }
+
+.chat-msgs {
+  flex: 1; overflow-y: auto; padding: 12px 12px 4px;
+  display: flex; flex-direction: column; gap: 8px;
+  scroll-behavior: smooth;
+}
+.chat-msgs::-webkit-scrollbar { width: 3px; }
+.chat-msgs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.chat-bubble {
+  max-width: 82%;
+  padding: 9px 12px; border-radius: 12px;
+  font-size: 12.5px; line-height: 1.45;
+}
+.chat-bubble-bot {
+  background: var(--surface2); color: var(--text);
+  border-bottom-left-radius: 3px; align-self: flex-start;
+  border: 1px solid var(--border);
+}
+.chat-bubble-user {
+  background: linear-gradient(135deg,#3f51b5,#5c6bc0);
+  color: white; border-bottom-right-radius: 3px; align-self: flex-end;
+}
+.chat-typing {
+  display: flex; gap: 4px; align-items: center;
+  padding: 10px 14px;
+}
+.chat-typing span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--muted);
+  animation: chatbounce 1.2s infinite;
+}
+.chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+.chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes chatbounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
+
+.chat-choices {
+  padding: 6px 10px 10px;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  flex-shrink: 0;
+}
+.chat-choice-btn {
+  background: var(--surface2); border: 1.5px solid var(--border);
+  color: var(--text); border-radius: 20px;
+  padding: 6px 13px; font-size: 12px; cursor: pointer;
+  transition: all 0.14s; font-weight: 500;
+}
+.chat-choice-btn:hover { border-color: var(--accent); color: #8fa3ff; }
+.chat-choice-btn.selected { border-color: var(--accent); background: rgba(92,107,192,0.18); color: #8fa3ff; }
+.chat-choice-btn.confirm-btn {
+  background: var(--accent); color: white; border-color: var(--accent); width: 100%; text-align: center; margin-top: 2px;
+}
+.chat-choice-btn.confirm-btn:hover { background: #3f51b5; }
+
+.chat-input-row {
+  display: flex; gap: 6px; padding: 8px 10px 12px;
+  border-top: 1px solid var(--border); flex-shrink: 0;
+}
+.chat-input-row input {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 20px;
+  padding: 7px 13px; font-size: 12px;
+}
+.chat-input-row input:focus { outline: none; border-color: var(--accent); }
+.chat-input-row button {
+  background: var(--accent); color: white; border: none;
+  border-radius: 50%; width: 32px; height: 32px; cursor: pointer;
+  font-size: 14px; flex-shrink: 0;
+}
+.chat-input-row button:hover { background: #3f51b5; }
+
+/* Persona badge in sidebar */
+.persona-badge {
+  margin: 6px 10px 0; padding: 7px 12px;
+  background: rgba(92,107,192,0.12); border: 1px solid rgba(92,107,192,0.3);
+  border-radius: 8px; display: flex; align-items: center; gap: 8px;
+  font-size: 11px; cursor: pointer; flex-shrink: 0;
+}
+.persona-badge:hover { background: rgba(92,107,192,0.2); }
+.persona-badge-icon { font-size: 16px; }
+.persona-badge-text { flex: 1; color: var(--muted); }
+.persona-badge-text strong { color: var(--accent); display: block; }
+.persona-badge.hidden { display: none !important; }
+.persona-reset { color: var(--muted); font-size: 14px; padding: 2px 4px; }
+
+@media (max-width: 767px) {
+  .chat-panel { width: calc(100vw - 24px); right: 12px; bottom: 76px; max-height: 70vh; }
+  .chat-fab { bottom: 72px; }
+}
 </style>
 </head>
 <body>
@@ -585,6 +731,15 @@
       </div>
       <div class="result-count" id="result-count">Loading...</div>
     </div>
+    <!-- Persona badge — shown after chatbot setup -->
+    <div class="persona-badge hidden" id="persona-badge" onclick="toggleChat()" title="Update your profile">
+      <div class="persona-badge-icon" id="persona-badge-icon">👤</div>
+      <div class="persona-badge-text">
+        <strong id="persona-badge-title">Your Profile</strong>
+        <span id="persona-badge-sub">Tap to update priorities</span>
+      </div>
+      <span class="persona-reset" title="Reset">✏️</span>
+    </div>
     <div class="prop-list" id="prop-list"></div>
   </div>
 
@@ -723,8 +878,14 @@ function calcScore(p) {
   if (p.culdesac) featScore += 2;
   featScore = Math.min(20, featScore);
 
+  // Apply persona weights and normalize to 0-100
+  const W = PERSONA.weights;
+  const weighted = imdScore*W.imd + schoolScore*W.school + crimeScore*W.crime + featScore*W.feat;
+  const maxW = 30*W.imd + 30*W.school + 20*W.crime + 20*W.feat;
+  const total = Math.min(100, Math.round((weighted / maxW) * 100));
+
   return {
-    total: imdScore + schoolScore + crimeScore + featScore,
+    total,
     imdScore, schoolScore, crimeScore, crimeLoaded, featScore,
     crimeStats: crime || null,
   };
@@ -889,6 +1050,43 @@ function walkMins(km) {
   const mins = Math.round(km * 1.3 / 5 * 60);
   if (mins <= 45) return mins + ' min walk';
   return kmToMiles(km) + ' mi';
+}
+
+// ============================================================
+// PERSONA — chatbot-collected user profile + score weights
+// ============================================================
+let PERSONA = {
+  set: false,
+  type: null,       // 'ftb' | 'family' | 'btl' | 'explore'
+  hasKids: null,
+  priorities: [],   // e.g. ['school','crime','transport']
+  commute: null,
+  apiKey: null,     // future: DeepSeek/OpenAI key
+  weights: { imd: 1, school: 1, crime: 1, feat: 1 }
+};
+
+// Weight presets by buyer type
+const PERSONA_PRESETS = {
+  ftb:    { imd: 1.3, school: 0.7, crime: 1.3, feat: 2.0 }, // value & features first
+  family: { imd: 1.0, school: 2.2, crime: 1.6, feat: 0.8 }, // schools & safety dominant
+  btl:    { imd: 2.0, school: 0.2, crime: 0.7, feat: 1.1 }, // area deprivation matters for yield
+  explore:{ imd: 1.0, school: 1.0, crime: 1.0, feat: 1.0 }, // balanced
+};
+
+function applyPersonaWeights() {
+  const base = { ...(PERSONA_PRESETS[PERSONA.type] || PERSONA_PRESETS.explore) };
+  // Layer priority boosts on top of type preset
+  if (PERSONA.priorities.includes('school'))    base.school = Math.min(3, base.school * 1.4);
+  if (PERSONA.priorities.includes('crime'))     base.crime  = Math.min(3, base.crime  * 1.4);
+  if (PERSONA.priorities.includes('value'))     base.imd    = Math.min(3, base.imd    * 1.3);
+  if (PERSONA.priorities.includes('quiet'))     base.crime  = Math.min(3, base.crime  * 1.2);
+  PERSONA.weights = base;
+  // Rescore all properties with new weights
+  PROPERTIES = PROPERTIES.map(p => {
+    const s = calcScore(p);
+    return { ...p, score: s.total, scoreBreakdown: s };
+  });
+  applyFilters();
 }
 
 // ============================================================
@@ -2391,6 +2589,268 @@ window.onload = () => {
     }
   }
 };
+
+// ============================================================
+// PERSONA CHATBOT ENGINE
+// ============================================================
+let CHAT_OPEN = false;
+let CHAT_STEP = 'welcome';
+let CHAT_MULTI_SELECTED = [];
+
+const CHAT_FLOW = {
+  welcome: {
+    bot: "Hi! 👋 I'm your property advisor. What best describes you?",
+    choices: [
+      { label: '🏠 First-time buyer', next: 'ftb_kids',   persona: { type: 'ftb' } },
+      { label: '👨‍👩‍👧 Moving family',   next: 'family_kids', persona: { type: 'family' } },
+      { label: '💼 Buy to let',         next: 'btl_focus',  persona: { type: 'btl' } },
+      { label: '🔍 Just browsing',      next: 'priorities', persona: { type: 'explore' } },
+    ]
+  },
+  ftb_kids: {
+    bot: "Thinking of starting a family soon?",
+    choices: [
+      { label: '👶 Yes, planning ahead', next: 'priorities', persona: { hasKids: true } },
+      { label: 'Not yet',               next: 'priorities', persona: { hasKids: false } },
+    ]
+  },
+  family_kids: {
+    bot: "What age are your children roughly?",
+    choices: [
+      { label: '🍼 Under 5',         next: 'priorities', persona: { hasKids: true, kidsAge: 'young' } },
+      { label: '📚 Primary (5–11)',  next: 'priorities', persona: { hasKids: true, kidsAge: 'primary' } },
+      { label: '🎓 Secondary (11+)', next: 'priorities', persona: { hasKids: true, kidsAge: 'secondary' } },
+    ]
+  },
+  btl_focus: {
+    bot: "Are you focused on capital growth or rental yield?",
+    choices: [
+      { label: '📈 Capital growth', next: 'priorities', persona: { btlFocus: 'growth' } },
+      { label: '💰 Rental yield',   next: 'priorities', persona: { btlFocus: 'yield' } },
+      { label: '⚖️ Both equally',   next: 'priorities', persona: { btlFocus: 'both' } },
+    ]
+  },
+  priorities: {
+    bot: "What matters most to you? Pick all that apply:",
+    type: 'multi',
+    choices: [
+      { label: '🏫 Good schools',     key: 'school' },
+      { label: '🔒 Low crime',        key: 'crime' },
+      { label: '🚂 Transport links',  key: 'transport' },
+      { label: '💰 Value for money',  key: 'value' },
+      { label: '🌳 Green spaces',     key: 'green' },
+      { label: '🛒 Shops nearby',     key: 'shops' },
+      { label: '🌙 Quiet area',       key: 'quiet' },
+    ],
+    next: 'commute',
+    confirmLabel: 'Set priorities →'
+  },
+  commute: {
+    bot: "Where do you commute to? (Helps highlight transport links)",
+    type: 'freetext',
+    placeholder: 'e.g. Manchester city centre',
+    next: 'done',
+    skipLabel: 'Skip →'
+  },
+  done: { bot: null }
+};
+
+function toggleChat() {
+  CHAT_OPEN = !CHAT_OPEN;
+  const panel = document.getElementById('chat-panel');
+  const dot = document.getElementById('chat-fab-dot');
+  if (CHAT_OPEN) {
+    panel.classList.add('open');
+    dot.classList.remove('show');
+    if (!document.getElementById('chat-msgs').children.length) {
+      chatStart();
+    }
+  } else {
+    panel.classList.remove('open');
+  }
+}
+
+function chatStart() {
+  CHAT_STEP = 'welcome';
+  CHAT_MULTI_SELECTED = [];
+  document.getElementById('chat-msgs').innerHTML = '';
+  document.getElementById('chat-choices').innerHTML = '';
+  document.getElementById('chat-input-row').style.display = 'none';
+  chatDeliver('welcome');
+}
+
+function chatDeliver(stepId) {
+  CHAT_STEP = stepId;
+  const step = CHAT_FLOW[stepId];
+  if (!step) return;
+
+  // Show typing indicator briefly
+  const msgs = document.getElementById('chat-msgs');
+  const typing = document.createElement('div');
+  typing.className = 'chat-bubble chat-bubble-bot chat-typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  msgs.appendChild(typing);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  setTimeout(() => {
+    msgs.removeChild(typing);
+
+    if (stepId === 'done') {
+      chatFinish();
+      return;
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble-bot';
+    bubble.textContent = step.bot;
+    msgs.appendChild(bubble);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    const choices = document.getElementById('chat-choices');
+    choices.innerHTML = '';
+    document.getElementById('chat-input-row').style.display = 'none';
+
+    if (step.type === 'multi') {
+      CHAT_MULTI_SELECTED = [];
+      step.choices.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = 'chat-choice-btn';
+        btn.textContent = c.label;
+        btn.onclick = () => {
+          const idx = CHAT_MULTI_SELECTED.indexOf(c.key);
+          if (idx === -1) { CHAT_MULTI_SELECTED.push(c.key); btn.classList.add('selected'); }
+          else { CHAT_MULTI_SELECTED.splice(idx, 1); btn.classList.remove('selected'); }
+        };
+        choices.appendChild(btn);
+      });
+      const confirm = document.createElement('button');
+      confirm.className = 'chat-choice-btn confirm-btn';
+      confirm.textContent = step.confirmLabel || 'Continue →';
+      confirm.onclick = () => {
+        PERSONA.priorities = [...CHAT_MULTI_SELECTED];
+        const label = CHAT_MULTI_SELECTED.length
+          ? step.choices.filter(c => CHAT_MULTI_SELECTED.includes(c.key)).map(c => c.label).join(', ')
+          : 'No specific priorities';
+        chatUserSay(label);
+        chatDeliver(step.next);
+      };
+      choices.appendChild(confirm);
+
+    } else if (step.type === 'freetext') {
+      const inputRow = document.getElementById('chat-input-row');
+      inputRow.style.display = 'flex';
+      document.getElementById('chat-text-input').placeholder = step.placeholder || '';
+      document.getElementById('chat-text-input').value = '';
+      document.getElementById('chat-text-input').focus();
+
+      const skipBtn = document.createElement('button');
+      skipBtn.className = 'chat-choice-btn';
+      skipBtn.textContent = step.skipLabel || 'Skip';
+      skipBtn.onclick = () => {
+        document.getElementById('chat-input-row').style.display = 'none';
+        choices.innerHTML = '';
+        chatDeliver(step.next);
+      };
+      choices.appendChild(skipBtn);
+
+    } else {
+      // Single-select choices
+      step.choices.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = 'chat-choice-btn';
+        btn.textContent = c.label;
+        btn.onclick = () => {
+          if (c.persona) Object.assign(PERSONA, c.persona);
+          chatUserSay(c.label);
+          choices.innerHTML = '';
+          chatDeliver(c.next);
+        };
+        choices.appendChild(btn);
+      });
+    }
+  }, 480);
+}
+
+function chatTextSubmit() {
+  const input = document.getElementById('chat-text-input');
+  const val = input.value.trim();
+  if (!val) return;
+  PERSONA.commute = val;
+  input.value = '';
+  document.getElementById('chat-input-row').style.display = 'none';
+  document.getElementById('chat-choices').innerHTML = '';
+  chatUserSay('📍 ' + val);
+  chatDeliver(CHAT_FLOW[CHAT_STEP]?.next || 'done');
+}
+
+function chatUserSay(text) {
+  const msgs = document.getElementById('chat-msgs');
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble chat-bubble-user';
+  bubble.textContent = text;
+  msgs.appendChild(bubble);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function chatFinish() {
+  // Apply the persona weights
+  applyPersonaWeights();
+  PERSONA.set = true;
+
+  // Build summary message
+  const typeLabels = { ftb: '🏠 First-time buyer', family: '👨‍👩‍👧 Family buyer', btl: '💼 Buy to let', explore: '🔍 Explorer' };
+  const typeLabel = typeLabels[PERSONA.type] || 'Property seeker';
+  const priorityNames = PERSONA.priorities.length
+    ? PERSONA.priorities.slice(0, 3).map(k => ({ school:'Schools', crime:'Safety', transport:'Transport', value:'Value', green:'Green spaces', shops:'Shops', quiet:'Quiet area' })[k] || k).join(' · ')
+    : 'Balanced';
+  const commuteNote = PERSONA.commute ? ` I'll keep ${PERSONA.commute} in mind for transport.` : '';
+
+  const msgs = document.getElementById('chat-msgs');
+  const typing = document.createElement('div');
+  typing.className = 'chat-bubble chat-bubble-bot chat-typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  msgs.appendChild(typing);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  setTimeout(() => {
+    msgs.removeChild(typing);
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble-bot';
+    bubble.textContent = `✅ Got it! I've adjusted property scores for a ${typeLabel.replace(/.*? /,'')} — prioritising ${priorityNames}.${commuteNote} Your scores now reflect your priorities!`;
+    msgs.appendChild(bubble);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Show reset option
+    const choices = document.getElementById('chat-choices');
+    choices.innerHTML = '';
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'chat-choice-btn';
+    resetBtn.textContent = '🔄 Start over';
+    resetBtn.onclick = () => chatStart();
+    choices.appendChild(resetBtn);
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'chat-choice-btn confirm-btn';
+    closeBtn.textContent = 'View properties ↗';
+    closeBtn.onclick = () => toggleChat();
+    choices.appendChild(closeBtn);
+
+    // Update persona badge
+    const badge = document.getElementById('persona-badge');
+    badge.classList.remove('hidden');
+    document.getElementById('persona-badge-icon').textContent = { ftb:'🏠', family:'👨‍👩‍👧', btl:'💼', explore:'🔍' }[PERSONA.type] || '👤';
+    document.getElementById('persona-badge-title').textContent = typeLabel;
+    document.getElementById('persona-badge-sub').textContent = priorityNames;
+
+    // Show score label update in header
+    document.getElementById('chat-status-line').textContent = '● Profile set';
+    showToast(`✅ Scores personalised for ${typeLabel}!`);
+  }, 500);
+}
+
+// Show attention dot on FAB after short delay if persona not yet set
+setTimeout(() => {
+  if (!PERSONA.set) document.getElementById('chat-fab-dot').classList.add('show');
+}, 3500);
 </script>
 <!-- ADD PROPERTY MODAL -->
 <div id="add-prop-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddPropModal()">
@@ -2505,6 +2965,29 @@ window.onload = () => {
     </div>
   </div>
 </div>
+
+  <!-- PERSONA CHATBOT WIDGET -->
+  <button class="chat-fab" id="chat-fab" onclick="toggleChat()" title="Property Advisor">
+    🏠
+    <div class="chat-fab-dot" id="chat-fab-dot"></div>
+  </button>
+
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-header">
+      <div class="chat-header-icon">🏠</div>
+      <div class="chat-header-title">
+        <strong>Property Advisor</strong>
+        <span id="chat-status-line">● Online</span>
+      </div>
+      <button class="chat-close-btn" onclick="toggleChat()">×</button>
+    </div>
+    <div class="chat-msgs" id="chat-msgs"></div>
+    <div class="chat-choices" id="chat-choices"></div>
+    <div class="chat-input-row" id="chat-input-row" style="display:none">
+      <input type="text" id="chat-text-input" placeholder="Type here…" onkeydown="if(event.key==='Enter')chatTextSubmit()"/>
+      <button onclick="chatTextSubmit()">↑</button>
+    </div>
+  </div>
 
 </body>
 </html>
