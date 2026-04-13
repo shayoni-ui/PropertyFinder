@@ -830,7 +830,7 @@ let PERSONA = {
   hasKids: null,
   priorities: [],   // e.g. ['school','crime','transport']
   commute: null,
-  apiKey: null,     // future: DeepSeek/OpenAI key
+  apiKey: 'sk-20535fc3c0d646c19e108f169c9d0e5b', // DeepSeek API key
   weights: { imd: 1, school: 1, crime: 1, feat: 1 }
 };
 
@@ -2771,12 +2771,24 @@ function chatDeliver(stepId) {
   }, 480);
 }
 
+// ── Conversation history for DeepSeek context ──
+let CHAT_HISTORY = [];
+let CHAT_LLM_MODE = false; // true after onboarding completes
+
 function chatTextSubmit() {
   const input = document.getElementById('chat-text-input');
   const val = input.value.trim();
   if (!val) return;
-  PERSONA.commute = val;
   input.value = '';
+
+  if (CHAT_LLM_MODE) {
+    // Post-onboarding: send to DeepSeek
+    askDeepSeek(val);
+    return;
+  }
+
+  // Onboarding flow: commute capture
+  PERSONA.commute = val;
   document.getElementById('chat-input-row').style.display = 'none';
   document.getElementById('chat-choices').innerHTML = '';
   chatUserSay('📍 ' + val);
@@ -2792,58 +2804,137 @@ function chatUserSay(text) {
   msgs.scrollTop = msgs.scrollHeight;
 }
 
+function chatShowTyping() {
+  const msgs = document.getElementById('chat-msgs');
+  const el = document.createElement('div');
+  el.className = 'chat-bubble chat-bubble-bot chat-typing';
+  el.innerHTML = '<span></span><span></span><span></span>';
+  msgs.appendChild(el);
+  msgs.scrollTop = msgs.scrollHeight;
+  return el;
+}
+
+function buildSystemPrompt() {
+  const typeLabels = { ftb:'first-time buyer', family:'family buyer', btl:'buy-to-let investor', explore:'property explorer' };
+  const typeLabel = typeLabels[PERSONA.type] || 'property buyer';
+  const priorities = PERSONA.priorities.length ? PERSONA.priorities.join(', ') : 'balanced';
+  const commuteStr = PERSONA.commute ? `Their commute destination is ${PERSONA.commute}.` : '';
+  const topProps = [...PROPERTIES]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map(p => `• ${p.address}: £${Math.round(p.price/1000)}k, ${p.beds}bed ${p.ptype || ''}, score ${p.score}/100, IMD decile ${p.imd}/10`)
+    .join('\n');
+  return `You are a friendly, concise UK property advisor chatbot. The user is a ${typeLabel}.
+Their priorities: ${priorities}. ${commuteStr}
+Keep every reply under 100 words. Use British English. Be specific — reference properties by short address when helpful.
+If no properties are shown yet, tell the user to search a postcode first.
+
+Top properties currently visible:
+${topProps || 'None loaded yet.'}`;
+}
+
+async function askDeepSeek(userMsg) {
+  chatUserSay(userMsg);
+  CHAT_HISTORY.push({ role: 'user', content: userMsg });
+  const typingEl = chatShowTyping();
+
+  try {
+    const resp = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${PERSONA.apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: buildSystemPrompt() },
+          ...CHAT_HISTORY.slice(-8) // keep last 4 exchanges for context
+        ],
+        max_tokens: 220,
+        temperature: 0.75
+      })
+    });
+
+    if (!resp.ok) throw new Error(`API ${resp.status}`);
+    const data = await resp.json();
+    const reply = data.choices?.[0]?.message?.content || 'No response received.';
+    CHAT_HISTORY.push({ role: 'assistant', content: reply });
+
+    typingEl.remove();
+    const msgs = document.getElementById('chat-msgs');
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble-bot';
+    bubble.textContent = reply;
+    msgs.appendChild(bubble);
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch (e) {
+    typingEl.remove();
+    const msgs = document.getElementById('chat-msgs');
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble-bot';
+    bubble.textContent = `⚠️ Couldn't reach DeepSeek right now (${e.message}). Try again in a moment.`;
+    msgs.appendChild(bubble);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+}
+
 function chatFinish() {
-  // Apply the persona weights
   applyPersonaWeights();
   PERSONA.set = true;
+  CHAT_HISTORY = []; // fresh context for LLM chat
 
-  // Build summary message
   const typeLabels = { ftb: '🏠 First-time buyer', family: '👨‍👩‍👧 Family buyer', btl: '💼 Buy to let', explore: '🔍 Explorer' };
   const typeLabel = typeLabels[PERSONA.type] || 'Property seeker';
   const priorityNames = PERSONA.priorities.length
     ? PERSONA.priorities.slice(0, 3).map(k => ({ school:'Schools', crime:'Safety', transport:'Transport', value:'Value', green:'Green spaces', shops:'Shops', quiet:'Quiet area' })[k] || k).join(' · ')
     : 'Balanced';
-  const commuteNote = PERSONA.commute ? ` I'll keep ${PERSONA.commute} in mind for transport.` : '';
+  const commuteNote = PERSONA.commute ? ` I'll factor in commuting to ${PERSONA.commute}.` : '';
 
   const msgs = document.getElementById('chat-msgs');
-  const typing = document.createElement('div');
-  typing.className = 'chat-bubble chat-bubble-bot chat-typing';
-  typing.innerHTML = '<span></span><span></span><span></span>';
-  msgs.appendChild(typing);
-  msgs.scrollTop = msgs.scrollHeight;
+  const typing = chatShowTyping();
 
   setTimeout(() => {
-    msgs.removeChild(typing);
-    const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble chat-bubble-bot';
-    bubble.textContent = `✅ Got it! I've adjusted property scores for a ${typeLabel.replace(/.*? /,'')} — prioritising ${priorityNames}.${commuteNote} Your scores now reflect your priorities!`;
-    msgs.appendChild(bubble);
-    msgs.scrollTop = msgs.scrollHeight;
+    typing.remove();
 
-    // Show reset option
-    const choices = document.getElementById('chat-choices');
-    choices.innerHTML = '';
-    const resetBtn = document.createElement('button');
-    resetBtn.className = 'chat-choice-btn';
-    resetBtn.textContent = '🔄 Start over';
-    resetBtn.onclick = () => chatStart();
-    choices.appendChild(resetBtn);
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'chat-choice-btn confirm-btn';
-    closeBtn.textContent = 'View properties ↗';
-    closeBtn.onclick = () => toggleChat();
-    choices.appendChild(closeBtn);
+    // Persona summary bubble
+    const summary = document.createElement('div');
+    summary.className = 'chat-bubble chat-bubble-bot';
+    summary.textContent = `✅ Profile set — ${typeLabel.replace(/^\S+ /,'')} · ${priorityNames}.${commuteNote} Scores updated!`;
+    msgs.appendChild(summary);
 
-    // Update persona badge
-    const badge = document.getElementById('persona-badge');
-    badge.classList.remove('hidden');
+    // Short DeepSeek intro after a beat
+    setTimeout(() => {
+      const intro = document.createElement('div');
+      intro.className = 'chat-bubble chat-bubble-bot';
+      intro.textContent = `💬 Now you can ask me anything — "Which property suits my commute?", "Best value for schools?", "Any hidden gems?" — I'll answer using your live results.`;
+      msgs.appendChild(intro);
+      msgs.scrollTop = msgs.scrollHeight;
+
+      // Switch to LLM mode + show persistent input
+      CHAT_LLM_MODE = true;
+      const choices = document.getElementById('chat-choices');
+      choices.innerHTML = '';
+      const resetBtn = document.createElement('button');
+      resetBtn.className = 'chat-choice-btn';
+      resetBtn.textContent = '🔄 Redo profile';
+      resetBtn.onclick = () => { CHAT_LLM_MODE = false; chatStart(); };
+      choices.appendChild(resetBtn);
+
+      const inputRow = document.getElementById('chat-input-row');
+      inputRow.style.display = 'flex';
+      const input = document.getElementById('chat-text-input');
+      input.placeholder = 'Ask me about these properties…';
+      input.focus();
+    }, 600);
+
+    // Update persona badge in sidebar
+    document.getElementById('persona-badge').classList.remove('hidden');
     document.getElementById('persona-badge-icon').textContent = { ftb:'🏠', family:'👨‍👩‍👧', btl:'💼', explore:'🔍' }[PERSONA.type] || '👤';
     document.getElementById('persona-badge-title').textContent = typeLabel;
     document.getElementById('persona-badge-sub').textContent = priorityNames;
-
-    // Show score label update in header
-    document.getElementById('chat-status-line').textContent = '● Profile set';
-    showToast(`✅ Scores personalised for ${typeLabel}!`);
+    document.getElementById('chat-status-line').textContent = '● AI advisor active';
+    showToast(`✅ Scores personalised · Ask the AI anything!`);
   }, 500);
 }
 
