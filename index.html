@@ -1064,13 +1064,20 @@ function renderSchoolsTab(nearby, propLat, propLng, filter) {
 }
 
 // Called by filter tab buttons inside the schools tab
+// propLat/propLng kept as params for backward-compat but we always re-lookup from PROPERTIES
 function switchSchoolFilter(filter, propLat, propLng) {
   if (!selectedId) return;
   const p = PROPERTIES.find(x => x.id === selectedId);
   if (!p) return;
   const nearby = getNearbySchools(p.lat, p.lng, 2.5);
   const section = document.querySelector('#tab-schools .schools-section');
-  if (section) section.innerHTML = renderSchoolsTab(nearby, propLat, propLng, filter);
+  if (!section) return;
+  try {
+    section.innerHTML = renderSchoolsTab(nearby, p.lat, p.lng, filter);
+  } catch(e) {
+    section.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:10px 0">⚠️ Could not render schools: ${e.message}</div>`;
+    console.error('switchSchoolFilter error:', e);
+  }
 }
 
 // ============================================================
@@ -1385,6 +1392,11 @@ function initMap() {
       }));
       document.getElementById('hdr-schools').textContent = SCHOOLS.length.toLocaleString();
       renderSchools();
+      // If a property detail panel is already open, refresh its schools tab
+      if (selectedId) {
+        const op = PROPERTIES.find(x => x.id === selectedId);
+        if (op) switchSchoolFilter('all', op.lat, op.lng);
+      }
     })
     .catch(() => console.warn('Schools data unavailable'));
 
@@ -1477,20 +1489,30 @@ async function fetchSupermarkets(props) {
   if (!props.length) return;
   const lats = props.map(p => p.lat).filter(Boolean);
   const lngs = props.map(p => p.lng).filter(Boolean);
-  const pad = 0.03;
+  const pad = 0.04;
   const s = Math.min(...lats) - pad, n = Math.max(...lats) + pad;
   const w = Math.min(...lngs) - pad, e = Math.max(...lngs) + pad;
 
-  // Query by name (not brand) — brand filter causes Overpass timeout due to index cost
-  // Co-operative = Co-op, M&S Food = Marks, Little Waitrose = Waitrose
-  const nameFilter = 'Waitrose|Sainsbury|Tesco|Asda|Morrisons|Lidl|Aldi|Iceland|Co-op|Co-operative|Marks|M&S';
-  const q = `[out:json][timeout:25];(node["shop"="supermarket"]["name"~"${nameFilter}",i](${s},${w},${n},${e});way["shop"="supermarket"]["name"~"${nameFilter}",i](${s},${w},${n},${e});node["shop"="convenience"]["name"~"${nameFilter}",i](${s},${w},${n},${e});way["shop"="convenience"]["name"~"${nameFilter}",i](${s},${w},${n},${e}););out center 100;`;
-  const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q);
+  // Use nwr (node+way+relation) shorthand — far more reliable than 4 separate queries.
+  // POST avoids URL-length limits. name~ not brand~ (brand index causes server-busy errors).
+  const nameFilter = 'Waitrose|Sainsbury|Tesco|Asda|Morrisons|Lidl|Aldi|Iceland|Co-op|Co-operative|Marks';
+  const q = `[out:json][timeout:25];nwr["shop"~"supermarket|convenience"]["name"~"${nameFilter}",i](${s},${w},${n},${e});out center 80;`;
 
   try {
-    const resp = await fetchWithTimeout(url, 28000);
-    const data = await resp.json();
-    SUPERMARKETS = data.elements
+    const resp = await fetchWithTimeout('https://overpass-api.de/api/interpreter', 28000, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(q)
+    });
+
+    if (!resp.ok) throw new Error(`Overpass HTTP ${resp.status}`);
+
+    const text = await resp.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch(_) { throw new Error('Overpass returned non-JSON — server busy, try again shortly'); }
+
+    SUPERMARKETS = (data.elements || [])
       .map(el => {
         const tags = el.tags || {};
         const info = shopInfo(tags);
@@ -1501,12 +1523,40 @@ async function fetchSupermarkets(props) {
         return { name: tags.brand || tags.name, lat, lng, ...info };
       })
       .filter(Boolean);
+
     renderShops();
-    // If a property detail panel is already open, refresh its shops tab
     refreshShopsTab();
   } catch (e) {
     console.warn('Supermarket fetch failed:', e.message);
+    refreshShopsTabError(e.message);
   }
+}
+
+// Called when fetch succeeds but panel already open — re-render shops list
+// Called when fetch fails — show retry button in open panel
+function refreshShopsTabError(msg) {
+  const tab = document.getElementById('tab-shops');
+  if (!tab) return;
+  const section = tab.querySelector('.schools-section');
+  if (!section) return;
+  section.innerHTML = `
+    <h3>🛒 Nearest Supermarkets</h3>
+    <div style="color:var(--muted);font-size:12px;padding:10px 0">
+      ⚠️ Couldn't load shop data (${msg || 'unknown error'}).
+      <br><br>
+      <button onclick="retryShops()" style="margin-top:6px;background:var(--accent);color:white;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">🔄 Retry</button>
+    </div>`;
+}
+
+function retryShops() {
+  if (!PROPERTIES.length) return;
+  // Reset SUPERMARKETS so the tab shows loading state
+  const tab = document.getElementById('tab-shops');
+  if (tab) {
+    const section = tab.querySelector('.schools-section');
+    if (section) section.innerHTML = '<h3>🛒 Nearest Supermarkets</h3><div style="color:var(--muted);font-size:12px;padding:10px 0">⏳ Loading shops…</div>';
+  }
+  fetchSupermarkets(PROPERTIES.filter(p => p.lat && p.lng));
 }
 
 function renderShops() {
@@ -2223,7 +2273,7 @@ function selectProperty(id) {
     <!-- SCHOOLS TAB -->
     <div id="tab-schools" class="tab-content">
       <div class="schools-section" id="schools-section-${p.id}">
-        ${renderSchoolsTab(nearby, p.lat, p.lng, 'all')}
+        ${(() => { try { return renderSchoolsTab(nearby, p.lat, p.lng, 'all'); } catch(e) { return `<div style='color:var(--muted);font-size:12px;padding:10px 0'>Schools loading… <button onclick="switchSchoolFilter('all',${p.lat},${p.lng})" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:6px">🔄 Load</button></div>`; } })()}
       </div>
     </div>
 
@@ -2233,7 +2283,7 @@ function selectProperty(id) {
         <h3>🛒 Nearest Supermarkets</h3>
         ${(() => {
           const shops = getNearestShops(p.lat, p.lng).slice(0, 8);
-          if (!shops.length) return '<div style="color:var(--muted);font-size:12px;padding:10px 0">No supermarket data yet — search for a postcode to load shops.</div>';
+          if (!shops.length) return '<div style="color:var(--muted);font-size:12px;padding:10px 0">No shop data yet. <button onclick="retryShops()" style="background:var(--accent);color:white;border:none;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:6px">🔄 Load shops</button></div>';
           const tierLabel = t => t === 'premium' ? '⭐ Premium' : t === 'mid' ? '✅ Mid-range' : '💰 Discount';
           return shops.map((s, i) => `
             <div style="display:flex;align-items:center;gap:10px;padding:8px 0;${i < shops.length-1 ? 'border-bottom:1px solid var(--border)' : ''}">
