@@ -2090,6 +2090,7 @@ function selectProperty(id) {
       <div class="detail-tab" onclick="switchTab(this,'tab-shops')">🛒 Shops</div>
       <div class="detail-tab" onclick="switchTab(this,'tab-depriv')">Deprivation</div>
       <div class="detail-tab" onclick="switchTab(this,'tab-sold')">💰 Sold</div>
+      <div class="detail-tab" onclick="switchTab(this,'tab-flood')">🌊 Flood & Planning</div>
     </div>
 
     <!-- SCORE TAB -->
@@ -2325,6 +2326,13 @@ function selectProperty(id) {
       </div>
     </div>
 
+    <!-- FLOOD & PLANNING TAB — populated by populateFloodPlanningTab() after render -->
+    <div id="tab-flood" class="tab-content">
+      <div class="score-section" id="tab-flood-body">
+        <div style="color:var(--muted);font-size:12px;padding:10px 0">⏳ Loading flood &amp; planning data…</div>
+      </div>
+    </div>
+
     ${p.summary ? `<div style="padding:12px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--muted);line-height:1.6"><strong style="color:var(--text)">About this property</strong><br>${p.summary}${p.addedDate ? `<br><span style="color:var(--accent);margin-top:4px;display:block">Listed: ${new Date(p.addedDate).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</span>` : ''}</div>` : ''}
     <div class="actions-section">
       <a class="action-btn" href="${p.url}" target="_blank"><span class="btn-icon">🏠</span>View on Rightmove</a>
@@ -2341,6 +2349,9 @@ function selectProperty(id) {
 
   // Async: load sold prices in background so tab is ready when clicked
   fetchSoldPrices(p.postcode);
+
+  // Async: load flood risk + planning data
+  populateFloodPlanningTab(p.lat, p.lng, p.postcode);
 
   // On mobile: close sidebar, show peek bar (user taps ⬆ to expand full sheet)
   if (isMobile()) {
@@ -2452,6 +2463,159 @@ async function fetchSoldPrices(postcode) {
       '<div style="font-size:10px;color:#546e7a;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">📡 HM Land Registry Price Paid Data · Crown copyright</div>';
   } catch(e) {
     container.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">⚠️ Could not load sold prices — try again later.</div>';
+  }
+}
+
+// ============================================================
+// FLOOD RISK + PLANNING APPLICATIONS
+// ============================================================
+async function populateFloodPlanningTab(lat, lng, postcode) {
+  const el = document.getElementById('tab-flood-body');
+  if (!el) return;
+
+  // Run flood + planning queries in parallel
+  const [floodHtml, planningHtml] = await Promise.all([
+    fetchFloodRisk(lat, lng),
+    fetchPlanningApps(lat, lng)
+  ]);
+
+  el.innerHTML = floodHtml + planningHtml;
+}
+
+async function fetchFloodRisk(lat, lng) {
+  // Environment Agency ArcGIS REST — Flood Map for Planning (Zone 2 & 3)
+  const base = 'https://environment.data.gov.uk/arcgis/rest/services/EA';
+  const params = `geometry=${lng},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json`;
+  try {
+    const [z3res, z2res] = await Promise.all([
+      fetchWithTimeout(`${base}/FloodMapForPlanningRiversAndSeaFloodZone3/MapServer/0/query?${params}`, 12000),
+      fetchWithTimeout(`${base}/FloodMapForPlanningRiversAndSeaFloodZone2/MapServer/0/query?${params}`, 12000)
+    ]);
+    const z3 = await z3res.json().catch(() => ({ features: [] }));
+    const z2 = await z2res.json().catch(() => ({ features: [] }));
+
+    const inZ3 = (z3.features || []).length > 0;
+    const inZ2 = (z2.features || []).length > 0;
+
+    let zone, color, icon, label, desc, advice;
+    if (inZ3) {
+      zone = 'Zone 3 — High Risk'; color = '#ef5350'; icon = '🔴';
+      label = 'High flood risk';
+      desc  = 'This property is in Flood Zone 3 — more than 1% annual chance of river flooding or 0.5% chance of sea flooding.';
+      advice = 'Flood insurance may be expensive or hard to obtain. A mortgage lender will likely require a full flood risk assessment. Check whether the property has flood resilience measures.';
+    } else if (inZ2) {
+      zone = 'Zone 2 — Medium Risk'; color = '#ffb74d'; icon = '🟠';
+      label = 'Medium flood risk';
+      desc  = 'This property is in Flood Zone 2 — between 0.1% and 1% annual chance of river flooding.';
+      advice = 'Insurance is usually available but may carry a higher premium. Consider requesting a flood history from the seller.';
+    } else {
+      zone = 'Zone 1 — Low Risk'; color = '#66bb6a'; icon = '🟢';
+      label = 'Low flood risk';
+      desc  = 'This property is outside Flood Zones 2 and 3 — less than 0.1% annual probability of flooding from rivers or sea.';
+      advice = 'Standard flood insurance rates should apply. Still check for surface water and groundwater flood risk.';
+    }
+
+    return `
+      <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">🌊 Flood Risk</h3>
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:${color}22;border-left:4px solid ${color};border-radius:0 8px 8px 0;margin-bottom:10px">
+        <div style="font-size:26px">${icon}</div>
+        <div>
+          <div style="font-size:13px;font-weight:800;color:${color}">${label}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${zone}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text);line-height:1.6;margin-bottom:8px">${desc}</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.6;padding:8px;background:var(--surface2);border-radius:6px;margin-bottom:4px">💡 ${advice}</div>
+      <div style="font-size:10px;color:#546e7a;margin-top:6px">📡 Environment Agency Flood Map for Planning · <a href="https://flood-map-for-planning.service.gov.uk/" target="_blank" style="color:var(--accent)">Check official map ↗</a></div>
+    `;
+  } catch(e) {
+    return `<h3 style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">🌊 Flood Risk</h3>
+      <div style="color:var(--muted);font-size:12px;padding:6px 0">⚠️ Could not load flood risk data. <a href="https://flood-map-for-planning.service.gov.uk/" target="_blank" style="color:var(--accent)">Check manually ↗</a></div>`;
+  }
+}
+
+async function fetchPlanningApps(lat, lng) {
+  // planning.data.gov.uk — query planning applications within ~500m
+  const point = `POINT(${lng} ${lat})`;
+  const url = `https://www.planning.data.gov.uk/api/v1/entity.json?dataset=planning-application&point=${encodeURIComponent(point)}&buffer=500&limit=10&fields=reference,description,development-type,status,decision-date,organisation-entity`;
+
+  const divider = '<div style="height:1px;background:var(--border);margin:14px 0"></div>';
+
+  try {
+    const res = await fetchWithTimeout(url, 12000);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const items = (data.entities || []);
+
+    // Also query for brownfield land as a secondary signal
+    const bfUrl = `https://www.planning.data.gov.uk/api/v1/entity.json?dataset=brownfield-land&point=${encodeURIComponent(point)}&buffer=500&limit=5&fields=reference,site-address,hectares,planning-permission-status,planning-permission-date`;
+    const bfRes = await fetchWithTimeout(bfUrl, 10000).catch(() => null);
+    const bfData = bfRes && bfRes.ok ? await bfRes.json().catch(() => ({})) : {};
+    const bfItems = (bfData.entities || []);
+
+    let html = `${divider}<h3 style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">🏗️ Nearby Planning & New Builds</h3>`;
+
+    // Brownfield sites (potential future development)
+    if (bfItems.length) {
+      html += `<div style="margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">🟤 Brownfield Land Within 500m</div>`;
+      html += bfItems.map(b => {
+        const ha = b.hectares ? `${parseFloat(b.hectares).toFixed(2)} ha` : '';
+        const addr = b['site-address'] || b.reference || 'Unnamed site';
+        const status = b['planning-permission-status'] || '';
+        const statusColor = status.toLowerCase().includes('permiss') ? '#66bb6a' : '#ffb74d';
+        return `<div style="padding:7px 10px;background:var(--surface2);border-radius:6px;margin-bottom:5px;font-size:11px">
+          <div style="font-weight:600;color:var(--text)">${addr}</div>
+          ${ha ? `<div style="color:var(--muted);margin-top:2px">Size: ${ha}</div>` : ''}
+          ${status ? `<div style="color:${statusColor};margin-top:2px">📋 ${status}</div>` : ''}
+        </div>`;
+      }).join('');
+      html += '</div>';
+    }
+
+    // Planning applications
+    if (!items.length) {
+      html += `<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">📋 Planning Applications Within 500m</div>
+        <div style="color:var(--muted);font-size:12px;padding:6px 0">No planning applications found nearby in the national dataset.</div>
+        <div style="font-size:10px;color:#546e7a;margin-top:6px">Check your <a href="https://www.planningportal.co.uk/applications" target="_blank" style="color:var(--accent)">local council planning portal ↗</a> for the most up-to-date applications.</div>`;
+    } else {
+      html += `<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">📋 Planning Applications Within 500m (${items.length})</div>`;
+      const statusColor = s => {
+        const l = (s || '').toLowerCase();
+        return l.includes('approv') || l.includes('permit') ? '#66bb6a'
+             : l.includes('refus') || l.includes('reject') ? '#ef5350'
+             : '#ffb74d';
+      };
+      const statusIcon = s => {
+        const l = (s || '').toLowerCase();
+        return l.includes('approv') || l.includes('permit') ? '✅'
+             : l.includes('refus') || l.includes('reject') ? '❌'
+             : '⏳';
+      };
+      html += items.map((app, i) => {
+        const desc = app.description ? (app.description.length > 90 ? app.description.slice(0, 90) + '…' : app.description) : 'No description';
+        const date = app['decision-date'] ? new Date(app['decision-date']).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'}) : '';
+        const status = app.status || app['development-type'] || '';
+        const ref = app.reference || '';
+        return `<div style="padding:8px 10px;background:var(--surface2);border-radius:6px;margin-bottom:6px;border-left:3px solid ${statusColor(status)};font-size:11px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+            <div style="font-weight:600;color:var(--text);line-height:1.4">${desc}</div>
+            <div style="flex-shrink:0;font-size:14px">${statusIcon(status)}</div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap">
+            ${status ? `<span style="color:${statusColor(status)}">${status}</span>` : ''}
+            ${date   ? `<span style="color:var(--muted)">${date}</span>` : ''}
+            ${ref    ? `<span style="color:var(--muted);font-size:10px">Ref: ${ref}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      html += `<div style="font-size:10px;color:#546e7a;margin-top:6px">📡 planning.data.gov.uk · <a href="https://www.planningportal.co.uk/applications" target="_blank" style="color:var(--accent)">Local council portal ↗</a></div>`;
+    }
+
+    return html;
+  } catch(e) {
+    return `${divider}<h3 style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">🏗️ Nearby Planning & New Builds</h3>
+      <div style="color:var(--muted);font-size:12px;padding:6px 0">⚠️ Could not load planning data. <a href="https://www.planningportal.co.uk/applications" target="_blank" style="color:var(--accent)">Check local council portal ↗</a></div>`;
   }
 }
 

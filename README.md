@@ -1,61 +1,108 @@
 # 🏠 Chesterfield Property Finder
 
-An interactive property research tool for house hunters in Chesterfield, Derbyshire. Cross-references Rightmove listings with IMD deprivation data and Ofsted school ratings, scoring every property with a composite **Best Value Score**.
+An interactive property intelligence tool for house hunters in Chesterfield, Derbyshire. Scores every property 0–100 using a composite algorithm combining location quality, school ratings, live crime data, flood risk, planning activity, and property features — all in a single-page app with no backend required.
 
-## Features
+## Live App
 
-- 🗺️ **Interactive Leaflet map** — Chesterfield properties plotted with colour-coded deprivation zone overlays
-- 📊 **Best Value Score (0–100)** — algorithmic ranking combining location, price efficiency, schools, and property features
-- 🏫 **School data** — Ofsted ratings, KS2 results, Attainment 8 / Progress 8 for 12 nearby schools
-- 🎨 **IMD deprivation zones** — visual overlays showing IMD decile per area (decile 1–10)
-- 🔍 **Filters** — price, beds, min. IMD decile, school Ofsted threshold, free-text search
-- 📋 **Detail panel** — tabbed breakdown of score, nearby schools, and deprivation data per property
-
-## Scoring Algorithm
-
-Each property receives a **Best Value Score out of 100**:
-
-| Component | Weight | Details |
-|---|---|---|
-| **Location (IMD Decile)** | 35% | Decile 10 = 35pts, Decile 1 = 0pts |
-| **Price Efficiency** | 25% | Lower end of £250k–£350k budget = higher score |
-| **School Quality** | 25% | Nearest primary + secondary Ofsted + KS2/Attainment 8 bonus |
-| **Property Features** | 15% | Detached (+5), No chain (+4), Extended/Renovated (+3), 2+ baths (+2), Large plot (+1) |
-
-## Data Sources
-
-- **Properties**: Rightmove listings (Chesterfield, £250k–£350k, 3–4 beds)
-- **IMD**: [English Indices of Deprivation 2025](https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025) — postcode-level data verified via `checkpostcode.uk`
-- **Schools**: Ofsted reports, DfE school performance tables, `reports.ofsted.gov.uk`
-- **Map**: Leaflet.js + OpenStreetMap / Esri satellite
-
-## IMD Findings — Chesterfield
-
-| Area | Postcodes | IMD Decile | Verdict |
-|---|---|---|---|
-| Loundsley Green | S40 4 | **10** | ✅ Least deprived |
-| Walton | S40 2/3 | **9** | ✅ Least deprived |
-| Brampton | S40 3 | **9** | ✅ Least deprived |
-| Ashgate | S40 | **9** | ✅ Least deprived |
-| Brockwell | S40 | **8** | ✅ Less deprived |
-| Newbold S41 7 | S41 7 | **8** | ✅ Less deprived |
-| Hasland | S41 0 | **6** | ⚠️ Middle |
-| Hady/Spire | S41 0FG | **5** | ⚠️ Caution |
-| Old Whittington | S41 9 | **4** | ❌ Avoid |
-| Newbold S41 8 | S41 8 | **3** | ❌ Avoid |
-| Dunston/Comley | S41 9SH | **2** | ❌ Avoid |
-
-## Usage
-
-Simply open `index.html` in any modern browser. No server or installation required.
-
-## Screenshot
-
-The tool shows:
-- Left panel: filterable property list with score badges
-- Map: colour-coded deprivation zones + property pins + school markers
-- Right panel: tabbed detail view (Score breakdown / Schools / Deprivation)
+Deployed on Vercel — push to `main` to publish, `staging` for preview.
 
 ---
 
-Built with ❤️ for Shayoni | Data current as of March 2026
+## Features
+
+| Feature | Details |
+|---|---|
+| 🗺️ **Interactive map** | Leaflet.js, colour-coded deprivation zone overlays, satellite toggle |
+| 📊 **Best Value Score 0–100** | Composite algorithm: IMD + Schools + Crime + Features |
+| 🎯 **Buyer persona** | FTB / Family / Buy-to-let / Explorer — reweights scoring on the fly |
+| 🏫 **Schools tab** | Ofsted ratings, KS2/Attainment 8, walking time, GIAS deep links |
+| 🛒 **Shops tab** | Nearest supermarkets via Overpass API (OSM), live on load |
+| 🌊 **Flood & Planning tab** | EA Flood Zone 1/2/3, brownfield land, planning applications (planning.data.gov.uk) |
+| 🚔 **Crime data** | police.uk API — crimes within ~1 mile, breakdown by category |
+| 💰 **Sold prices** | HM Land Registry Price Paid Data per postcode |
+| ⚡ **EPC + Broadband** | Verified EPC certificates + Ofcom coverage data |
+| 🤖 **AI chatbot** | DeepSeek-powered Q&A with buyer persona context |
+| 🔍 **Filters** | Price, beds, IMD decile, Ofsted threshold, free-text search |
+
+---
+
+## Scoring Algorithm
+
+Each property gets a **Best Value Score out of 100**, weighted by buyer persona:
+
+| Component | Max pts | Source |
+|---|---|---|
+| 📍 Location (IMD Decile) | 30 | English Indices of Deprivation 2025 |
+| 🏫 School Quality | 30 | Ofsted + KS2 / Attainment 8 |
+| 🚔 Crime Safety | 20 | police.uk API (live) |
+| 🏠 Property Features | 20 | Beds, parking, EPC, chain-free, plot size |
+
+Persona multipliers (e.g. Family buyer weights schools ×2.2, crime ×1.6) are applied and the total is normalised back to 0–100.
+
+**Verdict thresholds:**
+
+| Score | Verdict |
+|---|---|
+| 60–100 | ✅ Recommended |
+| 30–59 | ⚠️ Consider Carefully |
+| 0–29 | ❌ Avoid |
+
+---
+
+## Data Sources
+
+| Data | Source |
+|---|---|
+| Properties | Rightmove (Chesterfield, £250k–£350k, 3–4 bed) |
+| IMD | [English Indices of Deprivation 2025](https://www.gov.uk/government/statistics/english-indices-of-deprivation-2025) |
+| Schools | Ofsted reports, DfE performance tables, schools_uk.json |
+| Crime | [police.uk API](https://data.police.uk/docs/) |
+| Flood risk | [Environment Agency Flood Map for Planning](https://environment.data.gov.uk/arcgis/rest/services/EA) |
+| Planning applications | [planning.data.gov.uk](https://www.planning.data.gov.uk/) |
+| Shops | [OpenStreetMap via Overpass API](https://overpass-api.de/) |
+| Sold prices | [HM Land Registry Price Paid](https://landregistry.data.gov.uk/) |
+| Broadband | [Ofcom Connected Nations 2025](https://www.ofcom.org.uk/) |
+| AI Q&A | DeepSeek API (proxied via `/api/chat` Vercel function) |
+
+---
+
+## Project Structure
+
+```
+PropertyFinder/
+├── index.html          # Entire app — UI, map, scoring, all tab logic
+├── schools_uk.json     # Pre-built school dataset (Ofsted + DfE)
+├── greenspaces_gb.json # ONS green space proximity data
+├── api/
+│   ├── search.js       # Vercel serverless: Rightmove property search
+│   └── chat.js         # Vercel serverless: DeepSeek API proxy
+└── vercel.json         # Deployment config (main + staging branches)
+```
+
+---
+
+## Local Development
+
+No build step — just open `index.html` in a browser. For Vercel functions:
+
+```bash
+npm install -g vercel
+vercel dev          # runs functions locally at localhost:3000
+```
+
+Set `DEEPSEEK_API_KEY` in Vercel environment variables (Dashboard → Settings → Environment Variables).
+
+---
+
+## Deployment
+
+```bash
+git push origin main      # → production
+git push origin staging   # → preview URL
+```
+
+Vercel auto-deploys both branches (configured in `vercel.json`).
+
+---
+
+Built for Shayoni · Data current as of April 2026
