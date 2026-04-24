@@ -350,9 +350,153 @@ input[type=range]{accent-color:var(--accent);cursor:pointer;}
 .btn-add-prop{background:#16a34a;color:white;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;}
 .btn-add-prop:hover{background:#15803d;}
 @media(max-width:767px){.header-search{display:none;}}
+
+/* ============================================================
+   WELCOME CHAT OVERLAY
+   ============================================================ */
+#welcome-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 20px;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+#welcome-overlay.fade-out {
+  opacity: 0; pointer-events: none; transform: scale(1.02);
+}
+.wc-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  width: 100%; max-width: 520px;
+  box-shadow: 0 8px 48px rgba(0,0,0,0.10);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  max-height: 90vh;
+}
+.wc-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+}
+.wc-avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: linear-gradient(135deg,#7c3aed,#a78bfa);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.wc-header-text strong { font-size: 15px; color: var(--text); display: block; }
+.wc-header-text span { font-size: 12px; color: var(--muted); }
+.wc-skip { margin-left: auto; font-size: 12px; color: var(--muted); cursor: pointer; padding: 6px 10px; border-radius: 6px; border: none; background: none; transition: color 0.15s; }
+.wc-skip:hover { color: var(--text); }
+
+.wc-progress {
+  padding: 12px 24px 0;
+  display: flex; gap: 6px; flex-shrink: 0;
+}
+.wc-dot {
+  flex: 1; height: 3px; border-radius: 3px;
+  background: var(--surface2); transition: background 0.3s;
+}
+.wc-dot.done { background: var(--accent); }
+.wc-dot.active { background: #c4b5fd; }
+
+.wc-msgs {
+  flex: 1; overflow-y: auto; padding: 16px 20px 8px;
+  display: flex; flex-direction: column; gap: 10px;
+  scroll-behavior: smooth; min-height: 140px;
+}
+.wc-msgs::-webkit-scrollbar { width: 3px; }
+.wc-msgs::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.wc-bubble {
+  max-width: 85%; padding: 11px 14px;
+  border-radius: 16px; font-size: 13px; line-height: 1.5;
+  animation: wc-pop 0.25s cubic-bezier(0.34,1.4,0.64,1) both;
+}
+@keyframes wc-pop { from { opacity:0; transform:scale(0.9) translateY(6px); } to { opacity:1; transform:none; } }
+.wc-bubble-bot {
+  background: var(--surface2); color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px; align-self: flex-start;
+}
+.wc-bubble-user {
+  background: var(--accent); color: white;
+  border-bottom-right-radius: 4px; align-self: flex-end;
+}
+.wc-typing {
+  display: flex; gap: 5px; align-items: center;
+  padding: 12px 16px; align-self: flex-start;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 16px; border-bottom-left-radius: 4px;
+  animation: wc-pop 0.2s ease both;
+}
+.wc-typing span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--muted); animation: chatbounce 1.1s infinite;
+}
+.wc-typing span:nth-child(2) { animation-delay: 0.18s; }
+.wc-typing span:nth-child(3) { animation-delay: 0.36s; }
+
+.wc-choices {
+  padding: 8px 20px 20px;
+  display: flex; flex-wrap: wrap; gap: 8px;
+  flex-shrink: 0;
+}
+.wc-choice {
+  background: var(--surface2); border: 1.5px solid var(--border);
+  color: var(--text); border-radius: 20px;
+  padding: 8px 16px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.14s;
+}
+.wc-choice:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.wc-choice.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.wc-choice.wide { width: 100%; text-align: center; }
+.wc-choice.primary { background: var(--accent); color: white; border-color: var(--accent); font-weight: 600; }
+.wc-choice.primary:hover { background: #6d28d9; }
+
+.wc-input-row {
+  display: flex; gap: 8px; padding: 8px 20px 20px;
+  flex-shrink: 0;
+}
+.wc-input {
+  flex: 1; background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 10px; padding: 10px 14px; font-size: 13px;
+  color: var(--text); transition: border-color 0.15s;
+}
+.wc-input:focus { outline: none; border-color: var(--accent); }
+.wc-input-btn {
+  background: var(--accent); color: white; border: none;
+  border-radius: 10px; padding: 10px 18px; font-size: 13px;
+  font-weight: 600; cursor: pointer; flex-shrink: 0;
+}
+.wc-input-btn:hover { background: #6d28d9; }
 </style>
 </head>
 <body>
+
+<!-- WELCOME CHAT OVERLAY -->
+<div id="welcome-overlay">
+  <div class="wc-card">
+    <div class="wc-header">
+      <div class="wc-avatar">🏠</div>
+      <div class="wc-header-text">
+        <strong>Property Assistant</strong>
+        <span>Let's personalise your search</span>
+      </div>
+      <button class="wc-skip" onclick="dismissWelcome()">Skip →</button>
+    </div>
+    <div class="wc-progress" id="wc-progress"></div>
+    <div class="wc-msgs" id="wc-msgs"></div>
+    <div id="wc-choices" class="wc-choices"></div>
+    <div id="wc-input-area" style="display:none" class="wc-input-row">
+      <input class="wc-input" id="wc-text-input" placeholder="e.g. S40 3QL" onkeydown="if(event.key==='Enter')wcSubmitText()">
+      <button class="wc-input-btn" onclick="wcSubmitText()">→</button>
+    </div>
+  </div>
+</div>
 
 <header>
   <div class="logo">
@@ -2703,11 +2847,260 @@ function deleteProperty(id) {
 
 
 
+// ============================================================
+// WELCOME CHAT ONBOARDING
+// ============================================================
+const WC_STEPS = [
+  {
+    id: 'buyer_type',
+    msg: "Hi! I'm here to help you find your perfect property. First — what kind of buyer are you?",
+    choices: [
+      { label: '🏠 First-time buyer', value: 'ftb' },
+      { label: '👨‍👩‍👧 Growing family', value: 'family' },
+      { label: '💼 Buy to let', value: 'btl' },
+      { label: '🔍 Just exploring', value: 'explore' },
+    ]
+  },
+  {
+    id: 'priority',
+    msg: null, // set dynamically based on buyer type
+    multiSelect: true,
+    choices: [
+      { label: '🏫 Good schools', value: 'schools' },
+      { label: '📍 Safe, low-deprivation area', value: 'imd' },
+      { label: '🚔 Low crime', value: 'crime' },
+      { label: '🚂 Transport links', value: 'transport' },
+      { label: '🛒 Shops nearby', value: 'shops' },
+      { label: '🌊 Low flood risk', value: 'flood' },
+    ]
+  },
+  {
+    id: 'budget',
+    msg: "What's your budget?",
+    choices: [
+      { label: 'Under £250k', value: '0-250000' },
+      { label: '£250k – £350k', value: '250000-350000' },
+      { label: '£350k – £500k', value: '350000-500000' },
+      { label: '£500k+', value: '500000-2000000' },
+    ]
+  },
+  {
+    id: 'postcode',
+    msg: "Which area are you searching in? Enter a postcode and I'll centre the map there.",
+    input: true,
+    placeholder: 'e.g. S40 3QL, CV37 8FH…'
+  }
+];
+
+let wcStep = 0;
+let wcAnswers = {};
+let wcSelected = [];
+
+function wcInit() {
+  // Skip if already onboarded this session
+  if (sessionStorage.getItem('wc_done')) { dismissWelcome(true); return; }
+  buildWcProgress();
+  setTimeout(() => wcShowStep(0), 300);
+}
+
+function buildWcProgress() {
+  const el = document.getElementById('wc-progress');
+  el.innerHTML = WC_STEPS.map((_, i) => `<div class="wc-dot" id="wc-dot-${i}"></div>`).join('');
+  updateWcProgress();
+}
+
+function updateWcProgress() {
+  WC_STEPS.forEach((_, i) => {
+    const dot = document.getElementById('wc-dot-' + i);
+    if (!dot) return;
+    dot.className = 'wc-dot' + (i < wcStep ? ' done' : i === wcStep ? ' active' : '');
+  });
+}
+
+function wcShowStep(idx) {
+  wcStep = idx;
+  wcSelected = [];
+  updateWcProgress();
+
+  const step = WC_STEPS[idx];
+  let msg = step.msg;
+
+  // Dynamic messages based on earlier answers
+  if (step.id === 'priority') {
+    const typeMap = { ftb:'first-time buyer', family:'family buyer', btl:'buy-to-let investor', explore:'explorer' };
+    const type = typeMap[wcAnswers.buyer_type] || 'buyer';
+    msg = `Great — as a ${type}, what matters most to you? Pick everything that applies.`;
+  }
+
+  wcAddBotMsg(msg, () => {
+    if (step.input) {
+      wcShowInput(step.placeholder);
+    } else {
+      wcShowChoices(step.choices, !!step.multiSelect);
+    }
+  });
+}
+
+function wcAddBotMsg(text, callback) {
+  const msgs = document.getElementById('wc-msgs');
+  document.getElementById('wc-choices').innerHTML = '';
+  document.getElementById('wc-input-area').style.display = 'none';
+
+  // Typing indicator
+  const typing = document.createElement('div');
+  typing.className = 'wc-typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  msgs.appendChild(typing);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  setTimeout(() => {
+    typing.remove();
+    const bubble = document.createElement('div');
+    bubble.className = 'wc-bubble wc-bubble-bot';
+    bubble.textContent = text;
+    msgs.appendChild(bubble);
+    msgs.scrollTop = msgs.scrollHeight;
+    if (callback) setTimeout(callback, 200);
+  }, 900);
+}
+
+function wcAddUserMsg(text) {
+  const msgs = document.getElementById('wc-msgs');
+  const bubble = document.createElement('div');
+  bubble.className = 'wc-bubble wc-bubble-user';
+  bubble.textContent = text;
+  msgs.appendChild(bubble);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function wcShowChoices(choices, multi) {
+  const el = document.getElementById('wc-choices');
+  el.innerHTML = '';
+  choices.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'wc-choice';
+    btn.textContent = c.label;
+    btn.onclick = () => {
+      if (multi) {
+        btn.classList.toggle('selected');
+        if (btn.classList.contains('selected')) {
+          wcSelected.push(c.value);
+        } else {
+          wcSelected = wcSelected.filter(v => v !== c.value);
+        }
+      } else {
+        wcSelected = [c.value];
+        wcChoiceDone(choices);
+      }
+    };
+    el.appendChild(btn);
+  });
+
+  if (multi) {
+    const done = document.createElement('button');
+    done.className = 'wc-choice wide primary';
+    done.textContent = 'Continue →';
+    done.onclick = () => wcChoiceDone(choices);
+    el.appendChild(done);
+  }
+}
+
+function wcChoiceDone(choices) {
+  if (!wcSelected.length) return;
+  const step = WC_STEPS[wcStep];
+  const labels = wcSelected.map(v => choices.find(c => c.value === v)?.label || v).join(', ');
+  wcAnswers[step.id] = wcSelected.length === 1 ? wcSelected[0] : wcSelected;
+  wcAddUserMsg(labels);
+  document.getElementById('wc-choices').innerHTML = '';
+
+  if (wcStep + 1 < WC_STEPS.length) {
+    setTimeout(() => wcShowStep(wcStep + 1), 400);
+  } else {
+    wcFinish();
+  }
+}
+
+function wcShowInput(placeholder) {
+  const input = document.getElementById('wc-text-input');
+  input.placeholder = placeholder || '';
+  input.value = '';
+  document.getElementById('wc-input-area').style.display = 'flex';
+  setTimeout(() => input.focus(), 100);
+}
+
+function wcSubmitText() {
+  const val = document.getElementById('wc-text-input').value.trim();
+  if (!val) return;
+  const step = WC_STEPS[wcStep];
+  wcAnswers[step.id] = val;
+  wcAddUserMsg(val);
+  document.getElementById('wc-input-area').style.display = 'none';
+  if (wcStep + 1 < WC_STEPS.length) {
+    setTimeout(() => wcShowStep(wcStep + 1), 400);
+  } else {
+    wcFinish();
+  }
+}
+
+function wcFinish() {
+  updateWcProgress();
+  wcAddBotMsg("Perfect — setting up your personalised search now! ✨", () => {
+    setTimeout(() => {
+      applyWcAnswers();
+      dismissWelcome();
+    }, 800);
+  });
+}
+
+function applyWcAnswers() {
+  // Apply buyer persona
+  const typeMap = { ftb:'ftb', family:'family', btl:'btl', explore:'explore' };
+  const ptype = typeMap[wcAnswers.buyer_type];
+  if (ptype && PERSONA_PRESETS[ptype]) {
+    PERSONA.set = true;
+    PERSONA.type = ptype;
+    PERSONA.weights = { ...PERSONA_PRESETS[ptype] };
+    // Re-score all properties
+    PROPERTIES = PROPERTIES_RAW.map(p => calcScore(p));
+    updatePersonaBadge();
+  }
+
+  // Apply budget filter
+  if (wcAnswers.budget) {
+    const [mn, mx] = wcAnswers.budget.split('-').map(Number);
+    document.getElementById('price-min').value = mn;
+    document.getElementById('price-max').value = mx;
+    updatePriceDisplay();
+  }
+
+  // Apply postcode search
+  if (wcAnswers.postcode) {
+    const pc = wcAnswers.postcode.trim();
+    const inp = document.getElementById('postcode-input');
+    const sinp = document.getElementById('sidebar-postcode-input');
+    if (inp) inp.value = pc;
+    if (sinp) sinp.value = pc;
+    setTimeout(() => goToPostcode(), 600);
+  }
+
+  applyFilters();
+}
+
+function dismissWelcome(instant) {
+  sessionStorage.setItem('wc_done', '1');
+  const el = document.getElementById('welcome-overlay');
+  if (!el) return;
+  if (instant) { el.style.display = 'none'; return; }
+  el.classList.add('fade-out');
+  setTimeout(() => el.style.display = 'none', 520);
+}
+
 window.onload = () => {
   initMap();
   loadCustomProperties();
   updateIMDDisplay();
   updateSizeDisplay();
+  wcInit();
   // Mobile: start with map showing, sidebar hidden; collapse filter by default
   if (isMobile()) {
     mobileShowMap();
